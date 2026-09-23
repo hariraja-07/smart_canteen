@@ -25,7 +25,10 @@ func getEnv(key, fallback string) string {
 }
 
 func openDB() (*sql.DB, error) {
-	dsn := getEnv("DATABASE_URL", "postgres://smartcanteen:smartcanteen_dev@localhost:5432/smart_canteen")
+	dsn := getEnv("DATABASE_URL", "")
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required (see backend/.env.example)")
+	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err

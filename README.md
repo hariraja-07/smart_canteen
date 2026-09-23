@@ -4,10 +4,12 @@ Smart canteen: Go backend + Flutter frontend.
 
 ## Backend (Go, port 8080)
 
-Requires a PostgreSQL database reachable via `DATABASE_URL`:
+Requires a PostgreSQL database reachable via `DATABASE_URL`. Set it in an
+ignored `.env` file (copy from `backend/.env.example` and fill in your
+credentials):
 
 ```sh
-DATABASE_URL=postgres://smartcanteen:smartcanteen_dev@localhost:5432/smart_canteen
+DATABASE_URL=postgres://smartcanteen:change-me@localhost:5432/smart_canteen
 ```
 
 Tables (`users`, `menu_items`, `orders`, `order_items`) are created on startup and
@@ -29,16 +31,17 @@ docker network create smart-canteen-net
 # 2. start Postgres (persistent volume keeps data across container restarts)
 docker run -d --name smart-canteen-db --network smart-canteen-net \
   -e POSTGRES_USER=smartcanteen \
-  -e POSTGRES_PASSWORD=smartcanteen_dev \
+  -e POSTGRES_PASSWORD=change-me \
   -e POSTGRES_DB=smart_canteen \
   -p 5432:5432 \
   -v smart_canteen_data:/var/lib/postgresql/data \
   postgres:16-alpine
 
-# 3. build and run the backend image (URL uses the DB container name, not localhost)
+# 3. build and run the backend image (URL uses the DB container name, not localhost;
+#    set DATABASE_URL to the same password you chose above)
 docker build -t smart-canteen-backend backend/
 docker run -d --name backend -p 8080:8080 --network smart-canteen-net \
-  -e DATABASE_URL=postgres://smartcanteen:smartcanteen_dev@smart-canteen-db:5432/smart_canteen \
+  -e DATABASE_URL=postgres://smartcanteen:change-me@smart-canteen-db:5432/smart_canteen \
   smart-canteen-backend
 ```
 
