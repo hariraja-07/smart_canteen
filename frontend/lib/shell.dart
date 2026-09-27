@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'admin_page.dart';
 import 'cart.dart';
 import 'cart_page.dart';
 import 'coins_page.dart';
@@ -62,6 +63,13 @@ class _ShellState extends State<Shell> {
         label: 'Coins',
         page: CoinsPage(),
       ),
+      // Admin alone, matching the server's rule on both routes this screen uses.
+      if (session.isAdmin)
+        const _ShellTab(
+          icon: Icons.admin_panel_settings,
+          label: 'Admin',
+          page: AdminPage(),
+        ),
     ];
     final safeIndex = _index.clamp(0, tabs.length - 1);
 

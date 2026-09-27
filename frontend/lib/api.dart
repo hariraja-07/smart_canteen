@@ -174,6 +174,20 @@ class Api {
         .toList();
   }
 
+  /// Admin only: every account with its balance, so the admin can find who to
+  /// credit. The roster never carries a password hash.
+  static Future<List<User>> fetchUsers() async {
+    final data = await _send(
+      () => client.get(
+        Uri.parse('$baseUrl/api/admin/users'),
+        headers: _headers(),
+      ),
+    );
+    return (data as List<dynamic>)
+        .map((e) => User.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Admin only: credits a user for cash they paid at the counter.
   static Future<User> exchangeCoins(
     int userId,
