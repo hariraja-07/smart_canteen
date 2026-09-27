@@ -11,9 +11,6 @@ class SmartCanteenApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Smart Canteen',
-      home: MenuPage(),
-    );
+    return const MaterialApp(title: 'Smart Canteen', home: MenuPage());
   }
 }

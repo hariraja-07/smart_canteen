@@ -30,9 +30,7 @@ class _MenuPageState extends State<MenuPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Smart Canteen - Menu'),
-      ),
+      appBar: AppBar(title: const Text('Smart Canteen - Menu')),
       body: FutureBuilder<List<Dish>>(
         future: _menuFuture,
         builder: (context, snapshot) {
@@ -46,10 +44,7 @@ class _MenuPageState extends State<MenuPage> {
                 children: [
                   Text('Error: ${snapshot.error}'),
                   const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _retry,
-                    child: const Text('Retry'),
-                  ),
+                  FilledButton(onPressed: _retry, child: const Text('Retry')),
                 ],
               ),
             );
@@ -82,9 +77,9 @@ class _MenuList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
             child: Text(
               entry.key,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           for (final dish in entry.value) DishTile(dish: dish),
@@ -112,8 +107,10 @@ class DishTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            // Whole coins, so no decimal places. A 10-coin dish reads "10", not
+            // "10.00", because fractional coins do not exist here.
             Text(
-              dish.price.toStringAsFixed(2),
+              '${dish.price} coins',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),

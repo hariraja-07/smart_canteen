@@ -7,11 +7,12 @@ import 'package:frontend/api.dart';
 import 'package:frontend/main.dart';
 
 void main() {
+  // Whole-coin prices, matching the server's CHECK constraint.
   const menuJson = '''
 [
-  {"id":1,"name":"Pizza Margherita","category":"Main","price":9.99,"description":"Tomato, mozzarella, basil","available":true},
-  {"id":2,"name":"Garlic Naan","category":"Bread","price":2.49,"description":"Oven-baked naan with garlic","available":true},
-  {"id":3,"name":"Still Water","category":"Drinks","price":1.99,"description":"","available":false}
+  {"id":1,"name":"Masala Dosa","category":"Breakfast","price":50,"description":"Crisp dosa, potato, chutney","available":true},
+  {"id":2,"name":"Garlic Naan","category":"Bread","price":30,"description":"Oven-baked naan with garlic","available":true},
+  {"id":3,"name":"Mineral Water","category":"Drinks","price":20,"description":"","available":false}
 ]
 ''';
 
@@ -20,9 +21,9 @@ void main() {
     Api.client = client;
     final dishes = await Api.fetchMenu();
     expect(dishes, hasLength(3));
-    expect(dishes.first.name, 'Pizza Margherita');
-    expect(dishes.first.category, 'Main');
-    expect(dishes.first.price, 9.99);
+    expect(dishes.first.name, 'Masala Dosa');
+    expect(dishes.first.category, 'Breakfast');
+    expect(dishes.first.price, 50);
     expect(dishes.last.available, isFalse);
   });
 
@@ -33,10 +34,11 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('Pizza Margherita'), findsOneWidget);
+    expect(find.text('Masala Dosa'), findsOneWidget);
     expect(find.text('Garlic Naan'), findsOneWidget);
-    expect(find.text('9.99'), findsOneWidget);
-    expect(find.text('Main'), findsOneWidget);
+    // Whole coins, not "50.00".
+    expect(find.text('50 coins'), findsOneWidget);
+    expect(find.text('Breakfast'), findsOneWidget);
     expect(find.text('Bread'), findsOneWidget);
     expect(find.text('Available'), findsNWidgets(2));
     expect(find.text('Sold Out'), findsOneWidget);
