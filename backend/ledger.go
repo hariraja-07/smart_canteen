@@ -105,7 +105,7 @@ FROM coin_transactions`).Scan(&s.Issued, &s.Spent, &s.CanteenRevenue, &s.CoinsIn
 }
 
 func runReconcile() int {
-	db, err := initDB()
+	db, err := openDB()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1

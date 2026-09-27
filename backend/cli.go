@@ -92,7 +92,7 @@ func runCreateUser(args []string) int {
 		return 2
 	}
 
-	db, err := initDB()
+	db, err := openDB()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -124,7 +124,7 @@ func runCreateUsers(args []string) int {
 		return 2
 	}
 
-	db, err := initDB()
+	db, err := openDB()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1

@@ -12,7 +12,7 @@ import (
 // runServe starts the HTTP server. It is the default command, so running the
 // binary with no arguments behaves as before.
 func runServe() int {
-	db, err := initDB()
+	db, err := openDB()
 	if err != nil {
 		log.Fatal(err)
 	}

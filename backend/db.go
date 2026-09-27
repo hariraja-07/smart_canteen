@@ -8,15 +8,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-type MenuItem struct {
-	ID          int64
-	Name        string
-	Category    string
-	Price       int
-	Description string
-	Available   bool
-}
-
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -24,7 +15,31 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// openDB is the single way this program obtains a usable database: it connects,
+// brings the schema up to date, and seeds the demo users. Every caller goes
+// through here, so none of them can end up running against a schema that was
+// never migrated, which is the failure the previous pair of functions made
+// possible.
 func openDB() (*sql.DB, error) {
+	db, err := connectDB()
+	if err != nil {
+		return nil, fmt.Errorf("connect database: %w", err)
+	}
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := seedDemoUsers(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// connectDB dials Postgres and confirms the connection is live. Migrations and
+// seeding are openDB's job, so a caller that only wants a connection cannot
+// quietly get one against an unmigrated schema.
+func connectDB() (*sql.DB, error) {
 	dsn := getEnv("DATABASE_URL", "")
 	if dsn == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required (see backend/.env.example)")
@@ -34,39 +49,6 @@ func openDB() (*sql.DB, error) {
 		return nil, err
 	}
 	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
-	return db, nil
-}
-
-func listMenuItems(db *sql.DB) ([]MenuItem, error) {
-	rows, err := db.Query(`SELECT id, name, category, price::float8, description, available FROM menu_items ORDER BY category, name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []MenuItem{}
-	for rows.Next() {
-		var it MenuItem
-		if err := rows.Scan(&it.ID, &it.Name, &it.Category, &it.Price, &it.Description, &it.Available); err != nil {
-			return nil, err
-		}
-		items = append(items, it)
-	}
-	return items, rows.Err()
-}
-
-func initDB() (*sql.DB, error) {
-	db, err := openDB()
-	if err != nil {
-		return nil, fmt.Errorf("connect database: %w", err)
-	}
-	if err := runMigrations(db); err != nil {
-		db.Close()
-		return nil, err
-	}
-	if err := seedDemoUsers(db); err != nil {
 		db.Close()
 		return nil, err
 	}
