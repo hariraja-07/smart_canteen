@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -98,6 +99,16 @@ func runServe() int {
 		http.HandlerFunc(exchangeCoinsHandler(db))))
 	mux.Handle("GET /api/users/{id}/coins", requireAuth(db, secret,
 		http.HandlerFunc(coinHistoryHandler(db))))
+
+	// Orders. Any authenticated user can place one and read their own; the
+	// canteen and admin can read the whole queue and move orders along it.
+	mux.Handle("POST /api/orders", requireAuth(db, secret,
+		http.HandlerFunc(placeOrderHandler(db))))
+	mux.Handle("GET /api/orders", requireAuth(db, secret,
+		http.HandlerFunc(listOrdersHandler(db))))
+	mux.Handle("PATCH /api/orders/{id}/status", requireRole(db, secret,
+		[]string{RoleCanteenManagement, RoleAdmin},
+		http.HandlerFunc(setOrderStatusHandler(db))))
 
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
@@ -193,6 +204,102 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+type placeOrderRequest struct {
+	Items []CartLine `json:"items"`
+}
+
+func placeOrderHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := userFromContext(r)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		var req placeOrderRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		order, err := placeOrder(db, user.ID, req.Items)
+		if err != nil {
+			switch {
+			case errors.Is(err, errEmptyCart):
+				writeError(w, http.StatusBadRequest, "order has no items")
+			case errors.Is(err, errInsufficientCoins):
+				// 402: the request was well formed but there is not enough balance.
+				writeError(w, http.StatusPaymentRequired, "not enough coins")
+			case errors.Is(err, errInvalidAmount):
+				writeError(w, http.StatusBadRequest, "quantity must be a positive whole number")
+			default:
+				// Prices come from the database, so a rejected item is either sold
+				// out or gone, both of which the client should hear about.
+				log.Printf("place order: %v", err)
+				writeError(w, http.StatusBadRequest, err.Error())
+			}
+			return
+		}
+		writeJSON(w, http.StatusCreated, order)
+	}
+}
+
+func listOrdersHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		viewer, ok := userFromContext(r)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		orders, err := listOrders(db, viewer, r.URL.Query().Get("status"), 50)
+		if err != nil {
+			if strings.Contains(err.Error(), "unknown status") {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			log.Printf("list orders: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		writeJSON(w, http.StatusOK, orders)
+	}
+}
+
+type setStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func setOrderStatusHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		orderID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var req setStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		order, err := setOrderStatus(db, orderID, req.Status)
+		if err != nil {
+			switch {
+			case errors.Is(err, errOrderNotFound):
+				writeError(w, http.StatusNotFound, "order not found")
+			case errors.Is(err, errInsufficientCoins):
+				writeError(w, http.StatusConflict, "canteen balance cannot cover this refund")
+			case strings.Contains(err.Error(), "unknown status"),
+				strings.Contains(err.Error(), "cannot move an order"):
+				writeError(w, http.StatusConflict, err.Error())
+			default:
+				log.Printf("set order status: %v", err)
+				writeError(w, http.StatusInternalServerError, "internal error")
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, order)
+	}
 }
 
 func listUsersHandler(db *sql.DB) http.HandlerFunc {

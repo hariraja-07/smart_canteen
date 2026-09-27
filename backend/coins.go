@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 )
 
 var errInsufficientCoins = errors.New("insufficient coin balance")
@@ -116,6 +119,34 @@ FROM users WHERE id = $1`, targetUserID,
 		return User{}, err
 	}
 	return u, nil
+}
+
+// newGroupID mints the identifier that ties the two halves of a transfer
+// together. It has to be generated in Go rather than by the column default
+// because both ledger rows must share one value, and two independent defaults
+// would produce two unrelated ids.
+func newGroupID() string {
+	return fmt.Sprintf("%08x-%04x-4%03x-%04x-%012x",
+		randomUint32(), randomUint32()&0xffff, randomUint32()&0xfff,
+		randomUint32()&0x3fff|0x8000, randomUint64()&0xffffffffffff)
+}
+
+func randomUint32() uint32 {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand does not fail in practice; a UUID that is merely unique is
+		// still better than aborting an order over it.
+		binary.BigEndian.PutUint32(b[:], uint32(time.Now().UnixNano()))
+	}
+	return binary.BigEndian.Uint32(b[:])
+}
+
+func randomUint64() uint64 {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		binary.BigEndian.PutUint64(b[:], uint64(time.Now().UnixNano()))
+	}
+	return binary.BigEndian.Uint64(b[:])
 }
 
 // CoinEntry is one row of a user's coin history, as returned to clients.
