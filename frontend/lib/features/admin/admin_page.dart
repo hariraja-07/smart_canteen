@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/api.dart';
 import '../../core/async_action.dart';
 import '../../core/async_view.dart';
 import '../../core/models.dart';
@@ -35,7 +34,9 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final updated = await runMutation(
         context,
-        () => Api.exchangeCoins(target.id, result.amount, result.reason),
+        () => SessionScope.read(
+          context,
+        ).api.exchangeCoins(target.id, result.amount, result.reason),
       );
       if (updated == null || !mounted) return;
       setState(() => _version++);
@@ -58,7 +59,7 @@ class _AdminPageState extends State<AdminPage> {
     return Stack(
       children: [
         AsyncView<List<User>>(
-          load: Api.fetchUsers,
+          load: session.api.fetchUsers,
           refreshable: true,
           refreshToken: _version,
           isEmpty: (users) => users.isEmpty,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api.dart';
 import '../../core/async_view.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
@@ -17,7 +16,7 @@ class OrdersPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
     return AsyncView<List<Order>>(
-      load: Api.fetchOrders,
+      load: session.api.fetchOrders,
       refreshable: true,
       isEmpty: (orders) => orders.isEmpty,
       emptyMessage: session.canManageKitchen

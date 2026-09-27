@@ -11,8 +11,8 @@ import 'package:frontend/core/models.dart';
 import 'package:frontend/core/session.dart';
 
 Session signedIn({String role = Role.admin}) {
-  final s = Session();
-  Api.token = 'jwt';
+  final s = Session(api: api);
+  api.token = 'jwt';
   s.debugSetUser(
     User(
       id: 15,
@@ -76,15 +76,17 @@ Future<void> openAdmin(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// The client the app under test talks through. Each test assigns the
+/// transport it needs before pumping, so nothing is shared between them
+/// and no tearDown is left over to undo one test leaking into the next.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('who gets the admin tab', () {
     testWidgets('the admin gets it', (tester) async {
-      Api.client = Roster([]).client();
+      api = ApiClient(httpClient: Roster([]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
 
@@ -95,7 +97,7 @@ void main() {
       // The canteen manages the kitchen but does not mint coins, and the two
       // routes this screen uses are admin-only on the server.
       for (final role in [Role.canteenManagement, Role.student, Role.staff]) {
-        Api.client = Roster([]).client();
+        api = ApiClient(httpClient: Roster([]).client());
         await tester.pumpWidget(SmartCanteenApp(session: signedIn(role: role)));
         await tester.pumpAndSettle();
         expect(find.text('Admin'), findsNothing, reason: 'shown for $role');
@@ -105,22 +107,24 @@ void main() {
 
   group('the roster', () {
     testWidgets('lists each account with its balance', (tester) async {
-      Api.client = Roster([
-        {
-          'id': 17,
-          'name': 'Ravi',
-          'email': 'ravi@x.test',
-          'role': 'student',
-          'coin_balance': 110,
-        },
-        {
-          'id': 18,
-          'name': 'Priya',
-          'email': 'priya@x.test',
-          'role': 'student',
-          'coin_balance': 60,
-        },
-      ]).client();
+      api = ApiClient(
+        httpClient: Roster([
+          {
+            'id': 17,
+            'name': 'Ravi',
+            'email': 'ravi@x.test',
+            'role': 'student',
+            'coin_balance': 110,
+          },
+          {
+            'id': 18,
+            'name': 'Priya',
+            'email': 'priya@x.test',
+            'role': 'student',
+            'coin_balance': 60,
+          },
+        ]).client(),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -133,7 +137,7 @@ void main() {
     });
 
     testWidgets('no accounts reads as an empty roster', (tester) async {
-      Api.client = Roster([]).client();
+      api = ApiClient(httpClient: Roster([]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -155,7 +159,7 @@ void main() {
           'coin_balance': 10,
         },
       ]);
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -189,7 +193,7 @@ void main() {
           'coin_balance': 10,
         },
       ]);
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -219,7 +223,7 @@ void main() {
           'coin_balance': 10,
         },
       ]);
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -246,7 +250,7 @@ void main() {
           'coin_balance': 10,
         },
       ]);
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -274,7 +278,7 @@ void main() {
           'coin_balance': 10,
         },
       ])..rejectWith = 400;
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -302,7 +306,7 @@ void main() {
           'coin_balance': 10,
         },
       ])..rejectWith = 401;
-      Api.client = roster.client();
+      api = ApiClient(httpClient: roster.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openAdmin(tester);
@@ -320,26 +324,30 @@ void main() {
 
   group('fetchUsers', () {
     test('parses a roster', () async {
-      Api.client = MockClient(
-        (r) async => http.Response(
-          '[{"id":17,"name":"Ravi","email":"r@x.test","role":"student","coin_balance":5}]',
-          200,
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response(
+            '[{"id":17,"name":"Ravi","email":"r@x.test","role":"student","coin_balance":5}]',
+            200,
+          ),
         ),
       );
-      final users = await Api.fetchUsers();
+      final users = await api.fetchUsers();
       expect(users.single.name, 'Ravi');
       expect(users.single.coinBalance, 5);
     });
 
     test('a roster with no password field still parses', () async {
       // The server omits the hash, so a client that required it would break.
-      Api.client = MockClient(
-        (r) async => http.Response(
-          '[{"id":17,"name":"Ravi","email":"r@x.test","role":"student","coin_balance":5}]',
-          200,
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response(
+            '[{"id":17,"name":"Ravi","email":"r@x.test","role":"student","coin_balance":5}]',
+            200,
+          ),
         ),
       );
-      expect((await Api.fetchUsers()).single.role, 'student');
+      expect((await api.fetchUsers()).single.role, 'student');
     });
   });
 }

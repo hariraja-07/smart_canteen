@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api.dart';
 import '../../core/async_view.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
@@ -22,7 +21,7 @@ class CoinsPage extends StatelessWidget {
     return AsyncView<List<CoinEntry>>(
       // Rebuilt per load rather than captured, so signing in as someone else
       // cannot leave this reading the previous user's history.
-      load: () => Api.fetchCoinHistory(userId),
+      load: () => session.api.fetchCoinHistory(userId),
       refreshable: true,
       isEmpty: (entries) => entries.isEmpty,
       emptyMessage: 'No coin activity yet',

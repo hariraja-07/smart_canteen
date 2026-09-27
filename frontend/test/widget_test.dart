@@ -11,8 +11,8 @@ import 'package:frontend/app.dart';
 import 'package:frontend/core/session.dart';
 
 Session _signedIn() {
-  final session = Session();
-  Api.token = 'jwt';
+  final session = Session(api: api);
+  api.token = 'jwt';
   session.debugSetUser(
     const User(
       id: 17,
@@ -25,7 +25,14 @@ Session _signedIn() {
   return session;
 }
 
+/// The client the app under test talks through. Each test assigns the
+/// transport it needs before pumping, so nothing is shared between them
+/// and no tearDown is left over to undo one test leaking into the next.
+late ApiClient api;
+
 void main() {
+  setUp(() => api = ApiClient());
+
   // Whole-coin prices, matching the server's CHECK constraint.
   const menuJson = '''
 [
@@ -37,8 +44,8 @@ void main() {
 
   test('api fetchMenu parses dish list', () async {
     final client = MockClient((request) async => http.Response(menuJson, 200));
-    Api.client = client;
-    final dishes = await Api.fetchMenu();
+    api = ApiClient(httpClient: client);
+    final dishes = await api.fetchMenu();
     expect(dishes, hasLength(3));
     expect(dishes.first.name, 'Masala Dosa');
     expect(dishes.first.category, 'Breakfast');
@@ -51,7 +58,7 @@ void main() {
     // state is observed rather than raced: a mock that answers in a microtask
     // can finish before the first frame is ever drawn.
     final menu = Completer<http.Response>();
-    Api.client = MockClient((request) => menu.future);
+    api = ApiClient(httpClient: MockClient((request) => menu.future));
 
     await tester.pumpWidget(SmartCanteenApp(session: _signedIn()));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -69,7 +76,9 @@ void main() {
   });
 
   testWidgets('shows error and retry on failure', (WidgetTester tester) async {
-    Api.client = MockClient((request) async => http.Response('nope', 500));
+    api = ApiClient(
+      httpClient: MockClient((request) async => http.Response('nope', 500)),
+    );
 
     await tester.pumpWidget(SmartCanteenApp(session: _signedIn()));
     await tester.pumpAndSettle();

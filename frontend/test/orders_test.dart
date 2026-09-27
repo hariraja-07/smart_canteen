@@ -11,8 +11,8 @@ import 'package:frontend/core/models.dart';
 import 'package:frontend/core/session.dart';
 
 Session signedIn({String role = Role.student, int balance = 110}) {
-  final s = Session();
-  Api.token = 'jwt';
+  final s = Session(api: api);
+  api.token = 'jwt';
   s.debugSetUser(
     User(
       id: 17,
@@ -65,18 +65,22 @@ Map<String, Object> order({
   'updated_at': '2026-03-04T10:15:00Z',
 };
 
+/// The client the app under test talks through. Each test assigns the
+/// transport it needs before pumping, so nothing is shared between them
+/// and no tearDown is left over to undo one test leaking into the next.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('orders tab', () {
     testWidgets('lists orders with totals and status', (tester) async {
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/orders': [order()],
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': [order()],
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
 
       await tester.tap(find.text('Orders'));
@@ -93,10 +97,12 @@ void main() {
       // A student only ever receives their own orders, so their own name on the
       // card is noise. The server enforces the scoping; this is only the UI
       // agreeing with it.
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/orders': [order()],
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': [order()],
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.tap(find.text('Orders'));
       await tester.pumpAndSettle();
@@ -105,10 +111,12 @@ void main() {
     });
 
     testWidgets('the kitchen sees whose order it is', (tester) async {
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/orders': [order(customer: 'Priya')],
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': [order(customer: 'Priya')],
+        }),
+      );
       await tester.pumpWidget(
         SmartCanteenApp(session: signedIn(role: Role.canteenManagement)),
       );
@@ -121,7 +129,12 @@ void main() {
     testWidgets('an empty queue says so instead of showing nothing', (
       tester,
     ) async {
-      Api.client = routes({'/api/menu': <Object>[], '/api/orders': <Object>[]});
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': <Object>[],
+        }),
+      );
       await tester.pumpWidget(
         SmartCanteenApp(session: signedIn(role: Role.canteenManagement)),
       );
@@ -134,7 +147,12 @@ void main() {
     testWidgets('a student is told they have not ordered, in their own words', (
       tester,
     ) async {
-      Api.client = routes({'/api/menu': <Object>[], '/api/orders': <Object>[]});
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': <Object>[],
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.tap(find.text('Orders'));
       await tester.pumpAndSettle();
@@ -144,12 +162,14 @@ void main() {
 
     testWidgets('a failure offers a retry that refetches', (tester) async {
       var calls = 0;
-      Api.client = MockClient((r) async {
-        if (r.url.path == '/api/menu') return http.Response('[]', 200);
-        calls++;
-        if (calls == 1) return http.Response('{"error":"boom"}', 500);
-        return http.Response(jsonEncode([order()]), 200);
-      });
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          if (r.url.path == '/api/menu') return http.Response('[]', 200);
+          calls++;
+          if (calls == 1) return http.Response('{"error":"boom"}', 500);
+          return http.Response(jsonEncode([order()]), 200);
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.tap(find.text('Orders'));
       await tester.pumpAndSettle();
@@ -165,11 +185,13 @@ void main() {
 
     testWidgets('every request carries the token', (tester) async {
       final seen = <String?>[];
-      Api.client = MockClient((r) async {
-        seen.add(r.headers['Authorization']);
-        if (r.url.path == '/api/menu') return http.Response('[]', 200);
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          seen.add(r.headers['Authorization']);
+          if (r.url.path == '/api/menu') return http.Response('[]', 200);
+          return http.Response('[]', 200);
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.tap(find.text('Orders'));
       await tester.pumpAndSettle();
@@ -202,10 +224,12 @@ void main() {
     ];
 
     testWidgets('shows each movement with its sign', (tester) async {
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/users/17/coins': history,
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/users/17/coins': history,
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
 
       await tester.tap(find.text('Coins'));
@@ -222,13 +246,15 @@ void main() {
     ) async {
       // A hardcoded id here would show one user another user's ledger.
       final paths = <String>[];
-      Api.client = MockClient((r) async {
-        paths.add(r.url.path);
-        if (r.url.path == '/api/menu') return http.Response('[]', 200);
-        return http.Response('[]', 200);
-      });
-      final s = Session();
-      Api.token = 'jwt';
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          paths.add(r.url.path);
+          if (r.url.path == '/api/menu') return http.Response('[]', 200);
+          return http.Response('[]', 200);
+        }),
+      );
+      final s = Session(api: api);
+      api.token = 'jwt';
       s.debugSetUser(
         const User(
           id: 99,
@@ -247,10 +273,12 @@ void main() {
     });
 
     testWidgets('no activity yet reads as an empty history', (tester) async {
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/users/17/coins': <Object>[],
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/users/17/coins': <Object>[],
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.tap(find.text('Coins'));
       await tester.pumpAndSettle();
@@ -261,7 +289,7 @@ void main() {
 
   group('shell', () {
     testWidgets('the app bar balance is the signed-in balance', (tester) async {
-      Api.client = routes({'/api/menu': <Object>[]});
+      api = ApiClient(httpClient: routes({'/api/menu': <Object>[]}));
       await tester.pumpWidget(SmartCanteenApp(session: signedIn(balance: 110)));
       await tester.pumpAndSettle();
 
@@ -269,11 +297,13 @@ void main() {
     });
 
     testWidgets('three tabs are offered and each renders', (tester) async {
-      Api.client = routes({
-        '/api/menu': <Object>[],
-        '/api/orders': <Object>[],
-        '/api/users/17/coins': <Object>[],
-      });
+      api = ApiClient(
+        httpClient: routes({
+          '/api/menu': <Object>[],
+          '/api/orders': <Object>[],
+          '/api/users/17/coins': <Object>[],
+        }),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
 

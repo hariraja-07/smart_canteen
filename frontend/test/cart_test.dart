@@ -47,8 +47,8 @@ String _meJson(int balance) =>
     '"coin_balance":$balance}';
 
 Session signedIn({int balance = 110, String role = Role.student}) {
-  final s = Session();
-  Api.token = 'jwt';
+  final s = Session(api: api);
+  api.token = 'jwt';
   s.debugSetUser(
     User(
       id: 17,
@@ -92,11 +92,13 @@ Future<void> addAndOpenCart(WidgetTester tester, int addIndex) async {
   await tester.pumpAndSettle();
 }
 
+/// The client the app under test talks through. Each test assigns the
+/// transport it needs before pumping, so nothing is shared between them
+/// and no tearDown is left over to undo one test leaking into the next.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('Cart arithmetic', () {
     test('totals across lines and counts dishes', () {
@@ -154,7 +156,9 @@ void main() {
     testWidgets('a dish in the cart shows a stepper instead of Add', (
       tester,
     ) async {
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       final cart = Cart();
       await tester.pumpWidget(app(signedIn(), cart));
       await tester.pumpAndSettle();
@@ -169,7 +173,9 @@ void main() {
     });
 
     testWidgets('a sold-out dish offers no button at all', (tester) async {
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn()));
       await tester.pumpAndSettle();
 
@@ -184,28 +190,32 @@ void main() {
     testWidgets('sends the cart, clears it, and updates the balance', (
       tester,
     ) async {
+      String? body;
+      // The session is built from whatever client `api` holds, so the transport
+      // has to be in place before it, or this would test a session talking to
+      // the real server.
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders' && r.method == 'POST') {
+            body = r.body;
+            return http.Response(
+              '{"id":5,"user_id":17,"customer":"Ravi","total":60,"status":"pending",'
+              '"items":[],"created_at":"2026-03-04T10:15:00Z",'
+              '"updated_at":"2026-03-04T10:15:00Z"}',
+              201,
+            );
+          }
+          if (r.url.path == '/api/me') {
+            return http.Response(
+              '{"id":17,"name":"Ravi","email":"ravi@x.test","role":"student","coin_balance":50}',
+              200,
+            );
+          }
+          return http.Response('[]', 200);
+        }),
+      );
       final session = signedIn(balance: 110);
       final cart = Cart();
-      String? body;
-
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders' && r.method == 'POST') {
-          body = r.body;
-          return http.Response(
-            '{"id":5,"user_id":17,"customer":"Ravi","total":60,"status":"pending",'
-            '"items":[],"created_at":"2026-03-04T10:15:00Z",'
-            '"updated_at":"2026-03-04T10:15:00Z"}',
-            201,
-          );
-        }
-        if (r.url.path == '/api/me') {
-          return http.Response(
-            '{"id":17,"name":"Ravi","email":"ravi@x.test","role":"student","coin_balance":50}',
-            200,
-          );
-        }
-        return http.Response('[]', 200);
-      });
 
       await tester.pumpWidget(app(session, cart));
       await tester.pumpAndSettle();
@@ -229,16 +239,18 @@ void main() {
     testWidgets('the confirmation offers the order list and jumps there', (
       tester,
     ) async {
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders' && r.method == 'POST') {
-          return http.Response(
-            '{"id":5,"user_id":17,"customer":"Ravi","total":50,"status":"pending",'
-            '"items":[],"created_at":"","updated_at":""}',
-            201,
-          );
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders' && r.method == 'POST') {
+            return http.Response(
+              '{"id":5,"user_id":17,"customer":"Ravi","total":50,"status":"pending",'
+              '"items":[],"created_at":"","updated_at":""}',
+              201,
+            );
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
       await tester.pumpWidget(app(signedIn()));
       await tester.pumpAndSettle();
@@ -254,7 +266,9 @@ void main() {
     });
 
     testWidgets('an empty cart cannot be submitted', (tester) async {
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn()));
       await tester.pumpAndSettle();
 
@@ -268,7 +282,9 @@ void main() {
     testWidgets('the button is disabled when the coins are not there', (
       tester,
     ) async {
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       final cart = Cart()..add(_dosa); // 50 coins against a balance of 10
       await tester.pumpWidget(app(signedIn(balance: 10), cart));
       await tester.pumpAndSettle();
@@ -294,12 +310,14 @@ void main() {
       // The balance can change between the button being enabled and the tap, so
       // the server can still say no. That path has to be a clear message rather
       // than a raw failure.
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders') {
-          return http.Response('{"error":"not enough coins"}', 402);
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders') {
+            return http.Response('{"error":"not enough coins"}', 402);
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
       await tester.pumpWidget(app(signedIn(), Cart()..add(_chai)));
       await tester.pumpAndSettle();
@@ -317,12 +335,14 @@ void main() {
     testWidgets('a sold-out dish is reported, not silently dropped', (
       tester,
     ) async {
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders') {
-          return http.Response('{"error":"item 3 is sold out"}', 400);
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders') {
+            return http.Response('{"error":"item 3 is sold out"}', 400);
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
       // The dish was available when it was added and is sold out now, which is
       // the race the server catches and the client has to report.
@@ -341,12 +361,14 @@ void main() {
       tester,
     ) async {
       final cart = Cart()..add(_chai);
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders') {
-          return http.Response('{"error":"internal error"}', 500);
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders') {
+            return http.Response('{"error":"internal error"}', 500);
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
       await tester.pumpWidget(app(signedIn(), cart));
       await tester.pumpAndSettle();
@@ -369,12 +391,14 @@ void main() {
     ) async {
       // Every other screen would fail too, so the honest thing is the login
       // page rather than a cart that cannot be paid for.
-      Api.client = appRoutes((r) async {
-        if (r.url.path == '/api/orders') {
-          return http.Response('{"error":"expired"}', 401);
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: appRoutes((r) async {
+          if (r.url.path == '/api/orders') {
+            return http.Response('{"error":"expired"}', 401);
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
       await tester.pumpWidget(app(signedIn(), Cart()..add(_chai)));
       await tester.pumpAndSettle();
@@ -384,7 +408,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Sign in'), findsOneWidget);
-      expect(Api.token, isNull);
+      expect(api.token, isNull);
     });
   });
 
@@ -393,7 +417,9 @@ void main() {
       final cart = Cart()
         ..add(_dosa)
         ..add(_chai, 3);
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn(balance: 500), cart));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cart'));
@@ -410,7 +436,9 @@ void main() {
       tester,
     ) async {
       final cart = Cart()..add(_chai);
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn(), cart));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cart'));
@@ -428,7 +456,9 @@ void main() {
       tester,
     ) async {
       final cart = Cart()..add(_chai);
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn(), cart));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cart'));
@@ -444,7 +474,9 @@ void main() {
       tester,
     ) async {
       final cart = Cart();
-      Api.client = appRoutes((_) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: appRoutes((_) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(app(signedIn(), cart));
       await tester.pumpAndSettle();
       expect(find.byType(Badge), findsNothing);

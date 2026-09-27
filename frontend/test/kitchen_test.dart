@@ -22,8 +22,8 @@ const _chai = Dish(
 );
 
 Session signedIn({String role = Role.canteenManagement}) {
-  final s = Session();
-  Api.token = 'jwt';
+  final s = Session(api: api);
+  api.token = 'jwt';
   s.debugSetUser(
     User(
       id: 17,
@@ -129,15 +129,17 @@ Future<void> openKitchen(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// The client the app under test talks through. Each test assigns the
+/// transport it needs before pumping, so nothing is shared between them
+/// and no tearDown is left over to undo one test leaking into the next.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('who gets the kitchen tab', () {
     testWidgets('the canteen gets the kitchen tab', (tester) async {
-      Api.client = Kitchen([OrderStatus.pending]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.pending]).client());
       await tester.pumpWidget(
         SmartCanteenApp(session: signedIn(role: Role.canteenManagement)),
       );
@@ -147,7 +149,7 @@ void main() {
     });
 
     testWidgets('the admin gets the kitchen tab', (tester) async {
-      Api.client = Kitchen([OrderStatus.pending]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.pending]).client());
       await tester.pumpWidget(
         SmartCanteenApp(session: signedIn(role: Role.admin)),
       );
@@ -159,7 +161,7 @@ void main() {
     testWidgets('a student is never offered it', (tester) async {
       // The tab is hidden for students, so they cannot reach a screen whose
       // every request would 403.
-      Api.client = Kitchen([OrderStatus.pending]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.pending]).client());
       await tester.pumpWidget(
         SmartCanteenApp(session: signedIn(role: Role.student)),
       );
@@ -174,7 +176,7 @@ void main() {
   group('advancing an order', () {
     testWidgets('a pending order offers to start preparing', (tester) async {
       final kitchen = Kitchen([OrderStatus.pending]);
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -185,7 +187,7 @@ void main() {
     });
 
     testWidgets('a preparing order offers to mark it ready', (tester) async {
-      Api.client = Kitchen([OrderStatus.preparing]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.preparing]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -198,7 +200,7 @@ void main() {
       // A separate test rather than a second pumpWidget in the same body:
       // AsyncView holds its future across rebuilds, so re-pumping one tree
       // with a different mock would still be showing the first answer.
-      Api.client = Kitchen([OrderStatus.ready]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.ready]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -208,7 +210,7 @@ void main() {
     });
 
     testWidgets('a completed order offers no action at all', (tester) async {
-      Api.client = Kitchen([OrderStatus.completed]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.completed]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -220,7 +222,7 @@ void main() {
     });
 
     testWidgets('a cancelled order offers no action at all', (tester) async {
-      Api.client = Kitchen([OrderStatus.cancelled]).client();
+      api = ApiClient(httpClient: Kitchen([OrderStatus.cancelled]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -235,7 +237,7 @@ void main() {
       tester,
     ) async {
       final kitchen = Kitchen([OrderStatus.pending]);
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -251,7 +253,7 @@ void main() {
 
     testWidgets('each row advances its own order', (tester) async {
       final kitchen = Kitchen([OrderStatus.pending, OrderStatus.preparing]);
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -267,7 +269,7 @@ void main() {
   group('cancelling', () {
     testWidgets('asks first, and cancelling is refundable', (tester) async {
       final kitchen = Kitchen([OrderStatus.preparing]);
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -287,7 +289,7 @@ void main() {
 
     testWidgets('keeping the order sends nothing', (tester) async {
       final kitchen = Kitchen([OrderStatus.preparing]);
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -306,7 +308,7 @@ void main() {
       // The order moved on since the list was fetched, so the row would keep
       // failing. Say so, then re-read the truth.
       final kitchen = Kitchen([OrderStatus.pending])..rejectWith = 409;
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -323,7 +325,7 @@ void main() {
       tester,
     ) async {
       final kitchen = Kitchen([OrderStatus.pending])..rejectWith = 500;
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -342,7 +344,7 @@ void main() {
       tester,
     ) async {
       final kitchen = Kitchen([OrderStatus.pending])..rejectWith = 401;
-      Api.client = kitchen.client();
+      api = ApiClient(httpClient: kitchen.client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);
@@ -356,7 +358,7 @@ void main() {
 
   group('empty queue', () {
     testWidgets('says nothing is waiting', (tester) async {
-      Api.client = Kitchen([]).client();
+      api = ApiClient(httpClient: Kitchen([]).client());
       await tester.pumpWidget(SmartCanteenApp(session: signedIn()));
       await tester.pumpAndSettle();
       await openKitchen(tester);

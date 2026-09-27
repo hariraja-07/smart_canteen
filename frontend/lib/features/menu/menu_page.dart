@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api.dart';
 import '../../core/async_view.dart';
 import '../../core/cart.dart';
 import '../../core/models.dart';
+import '../../core/session.dart';
 
 /// The menu body, with no Scaffold of its own. The shell provides the app bar
 /// and navigation, so embedding this in a tab must not produce two app bars.
@@ -13,7 +13,7 @@ class MenuPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AsyncView<List<Dish>>(
-      load: Api.fetchMenu,
+      load: SessionScope.of(context).api.fetchMenu,
       isEmpty: (dishes) => dishes.isEmpty,
       emptyMessage: 'No dishes available',
       builder: (context, dishes) => _MenuList(dishes: dishes),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api.dart';
 import '../../core/async_action.dart';
 import '../../core/cart.dart';
 import '../../core/models.dart';
@@ -33,7 +32,7 @@ class _CartPageState extends State<CartPage> {
     try {
       final order = await runMutation(
         context,
-        () => Api.placeOrder(cart.toRequest()),
+        () => session.api.placeOrder(cart.toRequest()),
       );
       if (order == null) return;
       // Cleared before the balance is refreshed. If the refresh were to fail,

@@ -40,24 +40,41 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-class Api {
-  static const baseUrl = 'http://localhost:8080';
+/// Talks to the canteen API.
+///
+/// An instance rather than a class of statics, so a test can hand in its own
+/// [http.Client] and its own [baseUrl] instead of reaching into global state
+/// that the next test has to remember to reset. Two clients can coexist, which
+/// is what makes a test that signs in and out twice, or checks that one user's
+/// token is not another's, possible at all.
+///
+/// [token] lives here because it is the credential for these requests, and the
+/// session that decides whether the user is signed in is the thing that changes
+/// it.
+class ApiClient {
+  /// Where the API is. Change this constant to the deployed backend before
+  /// building, or pass a different value in.
+  static const defaultBaseUrl = 'http://localhost:8080';
 
-  static http.Client client = http.Client();
+  final http.Client _http;
+  final String baseUrl;
 
   /// The bearer token, or null when signed out. Every authenticated call reads
   /// this, so signing in and out is a single assignment rather than a token
   /// threaded through every call site.
-  static String? token;
+  String? token;
 
-  static Map<String, String> _headers() => {
+  ApiClient({http.Client? httpClient, this.baseUrl = defaultBaseUrl})
+    : _http = httpClient ?? http.Client();
+
+  Map<String, String> _headers() => {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
   };
 
   /// Turns a non-2xx response into an ApiException carrying the server's own
   /// message, which is written to be user-facing.
-  static ApiException _error(http.Response res) {
+  ApiException _error(http.Response res) {
     String message = 'HTTP ${res.statusCode}';
     try {
       final decoded = jsonDecode(res.body);
@@ -71,7 +88,7 @@ class Api {
     return ApiException(res.statusCode, message);
   }
 
-  static Future<dynamic> _send(Future<http.Response> Function() run) async {
+  Future<dynamic> _send(Future<http.Response> Function() run) async {
     final res = await run();
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw _error(res);
@@ -82,9 +99,9 @@ class Api {
     return jsonDecode(res.body);
   }
 
-  static Future<List<Dish>> fetchMenu() async {
+  Future<List<Dish>> fetchMenu() async {
     final data = await _send(
-      () => client.get(
+      () => _http.get(
         Uri.parse('$baseUrl/api/menu'),
         headers: {'Content-Type': 'application/json'},
       ),
@@ -97,9 +114,9 @@ class Api {
   /// Signs in and returns the user. Throws ApiException(401) with a generic
   /// message for both an unknown email and a wrong password, because the server
   /// does not distinguish them and neither should the app.
-  static Future<User> login(String email, String password) async {
+  Future<User> login(String email, String password) async {
     final data = await _send(
-      () => client.post(
+      () => _http.post(
         Uri.parse('$baseUrl/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
@@ -110,26 +127,26 @@ class Api {
     return User.fromJson(map);
   }
 
-  static Future<User> me() async {
+  Future<User> me() async {
     final data = await _send(
-      () => client.get(Uri.parse('$baseUrl/api/me'), headers: _headers()),
+      () => _http.get(Uri.parse('$baseUrl/api/me'), headers: _headers()),
     );
     return User.fromJson(data as Map<String, dynamic>);
   }
 
-  static Future<void> logout() async {
+  Future<void> logout() async {
     token = null;
   }
 
   /// The orders visible to the signed-in user. The server decides what that is:
   /// a student only ever receives their own, so there is no userId parameter to
   /// get wrong.
-  static Future<List<Order>> fetchOrders({String? status}) async {
+  Future<List<Order>> fetchOrders({String? status}) async {
     var uri = Uri.parse('$baseUrl/api/orders');
     if (status != null) {
       uri = uri.replace(queryParameters: {'status': status});
     }
-    final data = await _send(() => client.get(uri, headers: _headers()));
+    final data = await _send(() => _http.get(uri, headers: _headers()));
     return (data as List<dynamic>)
         .map((e) => Order.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -137,7 +154,7 @@ class Api {
 
   /// Places an order. The cart carries only dish ids and quantities; the server
   /// looks up the prices, so a tampered client cannot name its own price.
-  static Future<Order> placeOrder(Map<int, int> cart) async {
+  Future<Order> placeOrder(Map<int, int> cart) async {
     if (cart.isEmpty) {
       // Checked here as well as on the server: an empty cart is a dead end, and
       // spending a request to learn that wastes a round trip and would let a
@@ -148,7 +165,7 @@ class Api {
         .map((e) => {'menu_item_id': e.key, 'qty': e.value})
         .toList();
     final data = await _send(
-      () => client.post(
+      () => _http.post(
         Uri.parse('$baseUrl/api/orders'),
         headers: _headers(),
         body: jsonEncode({'items': items}),
@@ -158,9 +175,9 @@ class Api {
   }
 
   /// Moves an order along the kitchen queue. Canteen and admin only.
-  static Future<Order> setOrderStatus(int orderId, String status) async {
+  Future<Order> setOrderStatus(int orderId, String status) async {
     final data = await _send(
-      () => client.patch(
+      () => _http.patch(
         Uri.parse('$baseUrl/api/orders/$orderId/status'),
         headers: _headers(),
         body: jsonEncode({'status': status}),
@@ -169,9 +186,9 @@ class Api {
     return Order.fromJson(data as Map<String, dynamic>);
   }
 
-  static Future<List<CoinEntry>> fetchCoinHistory(int userId) async {
+  Future<List<CoinEntry>> fetchCoinHistory(int userId) async {
     final data = await _send(
-      () => client.get(
+      () => _http.get(
         Uri.parse('$baseUrl/api/users/$userId/coins'),
         headers: _headers(),
       ),
@@ -183,12 +200,10 @@ class Api {
 
   /// Admin only: every account with its balance, so the admin can find who to
   /// credit. The roster never carries a password hash.
-  static Future<List<User>> fetchUsers() async {
+  Future<List<User>> fetchUsers() async {
     final data = await _send(
-      () => client.get(
-        Uri.parse('$baseUrl/api/admin/users'),
-        headers: _headers(),
-      ),
+      () =>
+          _http.get(Uri.parse('$baseUrl/api/admin/users'), headers: _headers()),
     );
     return (data as List<dynamic>)
         .map((e) => User.fromJson(e as Map<String, dynamic>))
@@ -196,13 +211,9 @@ class Api {
   }
 
   /// Admin only: credits a user for cash they paid at the counter.
-  static Future<User> exchangeCoins(
-    int userId,
-    int amount,
-    String reason,
-  ) async {
+  Future<User> exchangeCoins(int userId, int amount, String reason) async {
     final data = await _send(
-      () => client.post(
+      () => _http.post(
         Uri.parse('$baseUrl/api/admin/users/$userId/coins'),
         headers: _headers(),
         body: jsonEncode({'amount': amount, 'reason': reason}),

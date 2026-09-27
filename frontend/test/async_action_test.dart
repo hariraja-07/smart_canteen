@@ -13,7 +13,7 @@ import 'package:frontend/core/session.dart';
 /// whichever screen happened to exercise them first.
 
 Session _signedIn() {
-  final s = Session();
+  final s = Session(api: ApiClient());
   s.debugSetUser(
     const User(
       id: 17,
@@ -73,10 +73,6 @@ Future<Session> _pump(
 }
 
 void main() {
-  tearDown(() {
-    Api.token = null;
-  });
-
   testWidgets('a successful action returns its value and shows nothing', (
     tester,
   ) async {

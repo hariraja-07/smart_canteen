@@ -11,8 +11,17 @@ import 'models.dart';
 /// showing a screen that would fail. Hiding a button is a courtesy to the user;
 /// it is not the access control.
 class Session extends ChangeNotifier {
+  /// The client every request goes through. It lives here because the token
+  /// lives there too, and the session is what decides whether there is a token.
+  /// Screens reach it as `session.api`, which is why there is no separate scope
+  /// for the client: everything that can talk to the API already has a session.
+  final ApiClient api;
+
   User? _user;
   bool _busy = false;
+
+  /// [api] is injectable so a test can supply its own transport and base URL.
+  Session({ApiClient? api}) : api = api ?? ApiClient();
 
   User? get user => _user;
   bool get isSignedIn => _user != null;
@@ -33,7 +42,7 @@ class Session extends ChangeNotifier {
     _busy = true;
     notifyListeners();
     try {
-      _user = await Api.login(email.trim(), password);
+      _user = await api.login(email.trim(), password);
     } finally {
       _busy = false;
       notifyListeners();
@@ -41,7 +50,7 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    await Api.logout();
+    await api.logout();
     _user = null;
     notifyListeners();
   }
@@ -60,14 +69,14 @@ class Session extends ChangeNotifier {
   Future<void> refresh() async {
     if (!isSignedIn) return;
     try {
-      _user = await Api.me();
+      _user = await api.me();
     } on ApiException catch (e) {
       if (needsSignOut(e)) {
         // The token expired or was revoked. Keeping a shell the user can no
         // longer act in would strand them on screens that only fail, so sign
         // out and let them sign back in.
         _user = null;
-        await Api.logout();
+        await api.logout();
       } else {
         // A network blip should not throw the user out of the app. The cached
         // balance may be briefly stale, which is a smaller problem than a

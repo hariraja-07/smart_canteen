@@ -230,8 +230,8 @@ cannot use a wide-open CORS policy to read one user's data as another. If you
 add a browser client served from a known site, set `CORS_ALLOWED_ORIGIN` to that
 origin.
 
-The Flutter app is a normal mobile build. It points at a hardcoded
-`Api.baseUrl`, so change that constant to the deployed backend URL before
-building. Cleartext HTTP is enabled in the Android manifest for local
-development; a production build talking to a public host should use HTTPS and
-that setting should be tightened.
+The Flutter app is a normal mobile build. It points at
+`ApiClient.defaultBaseUrl`, so change that constant to the deployed backend URL
+before building, or pass a different `baseUrl` to `ApiClient`. Cleartext HTTP is
+enabled in the Android manifest for local development; a production build
+talking to a public host should use HTTPS and that setting should be tightened.

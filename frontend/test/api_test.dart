@@ -5,11 +5,13 @@ import 'package:http/testing.dart';
 import 'package:frontend/core/api.dart';
 import 'package:frontend/core/models.dart';
 
+/// The client under test. Each test builds its own, so nothing is shared
+/// between them and no tearDown is left over to undo one test's transport
+/// leaking into the next.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('login', () {
     const ok =
@@ -17,23 +19,27 @@ void main() {
         '"coin_balance":110,"token":"jwt-here"}';
 
     test('stores the token and returns the user', () async {
-      Api.client = MockClient((r) async => http.Response(ok, 200));
-      final user = await Api.login('ravi@x.test', 'pw');
+      api = ApiClient(
+        httpClient: MockClient((r) async => http.Response(ok, 200)),
+      );
+      final user = await api.login('ravi@x.test', 'pw');
 
       expect(user.name, 'Ravi');
       expect(user.role, Role.student);
       expect(user.coinBalance, 110);
       // The token is kept so later calls can send it without threading it around.
-      expect(Api.token, 'jwt-here');
+      expect(api.token, 'jwt-here');
     });
 
     test('sends the credentials in the body', () async {
       String? body;
-      Api.client = MockClient((r) async {
-        body = r.body;
-        return http.Response(ok, 200);
-      });
-      await Api.login('ravi@x.test', 'hunter2');
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          body = r.body;
+          return http.Response(ok, 200);
+        }),
+      );
+      await api.login('ravi@x.test', 'hunter2');
 
       expect(body, contains('ravi@x.test'));
       expect(body, contains('hunter2'));
@@ -43,13 +49,15 @@ void main() {
     test(
       'a wrong password is unauthorized and the server message is kept',
       () async {
-        Api.client = MockClient(
-          (r) async =>
-              http.Response('{"error":"invalid email or password"}', 401),
+        api = ApiClient(
+          httpClient: MockClient(
+            (r) async =>
+                http.Response('{"error":"invalid email or password"}', 401),
+          ),
         );
 
         await expectLater(
-          Api.login('ravi@x.test', 'wrong'),
+          api.login('ravi@x.test', 'wrong'),
           throwsA(
             isA<ApiException>()
                 .having((e) => e.statusCode, 'statusCode', 401)
@@ -61,7 +69,7 @@ void main() {
           ),
         );
         // A failed sign-in must not leave a stale token behind.
-        expect(Api.token, isNull);
+        expect(api.token, isNull);
       },
     );
   });
@@ -70,11 +78,13 @@ void main() {
     // Each of these drives a different response in the UI, so the mapping from
     // status to meaning is worth pinning.
     test('401 means send the user back to login', () async {
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"nope"}', 401),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"nope"}', 401),
+        ),
       );
       await expectLater(
-        Api.me(),
+        api.me(),
         throwsA(
           predicate(
             (e) => e is ApiException && e.isUnauthorized && !e.isForbidden,
@@ -84,11 +94,13 @@ void main() {
     });
 
     test('403 means authenticated but not allowed', () async {
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"nope"}', 403),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"nope"}', 403),
+        ),
       );
       await expectLater(
-        Api.fetchOrders(),
+        api.fetchOrders(),
         throwsA(
           predicate(
             (e) => e is ApiException && e.isForbidden && !e.isUnauthorized,
@@ -98,21 +110,25 @@ void main() {
     });
 
     test('402 means not enough coins, so the cart can be topped up', () async {
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"not enough coins"}', 402),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"not enough coins"}', 402),
+        ),
       );
       await expectLater(
-        Api.placeOrder({1: 1}),
+        api.placeOrder({1: 1}),
         throwsA(predicate((e) => e is ApiException && e.isPaymentRequired)),
       );
     });
 
     test('5xx is retryable, 4xx is not', () async {
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"boom"}', 500),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"boom"}', 500),
+        ),
       );
       await expectLater(
-        Api.me(),
+        api.me(),
         throwsA(
           predicate(
             (e) => e is ApiException && e.isRetryable && !e.isUnauthorized,
@@ -120,26 +136,30 @@ void main() {
         ),
       );
 
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"boom"}', 400),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"boom"}', 400),
+        ),
       );
       await expectLater(
-        Api.me(),
+        api.me(),
         throwsA(predicate((e) => e is ApiException && !e.isRetryable)),
       );
     });
 
     test('a non-JSON error body falls back to the status code', () async {
       // A proxy in front of the server returns HTML, not our JSON.
-      Api.client = MockClient(
-        (r) async => http.Response(
-          '<html>502</html>',
-          502,
-          headers: {'content-type': 'text/html'},
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response(
+            '<html>502</html>',
+            502,
+            headers: {'content-type': 'text/html'},
+          ),
         ),
       );
       await expectLater(
-        Api.me(),
+        api.me(),
         throwsA(predicate((e) => e is ApiException && e.statusCode == 502)),
       );
     });
@@ -147,30 +167,60 @@ void main() {
 
   group('auth header', () {
     test('is sent once a token exists', () async {
-      Api.token = 'jwt-here';
       String? auth;
-      Api.client = MockClient((r) async {
-        auth = r.headers['Authorization'];
-        return http.Response('[]', 200);
-      });
-      await Api.fetchOrders();
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          auth = r.headers['Authorization'];
+          return http.Response('[]', 200);
+        }),
+      );
+      api.token = 'jwt-here';
+      await api.fetchOrders();
       expect(auth, 'Bearer jwt-here');
     });
 
     test('is omitted when signed out', () async {
       String? auth;
-      Api.client = MockClient((r) async {
-        auth = r.headers['Authorization'];
-        return http.Response('[]', 200);
-      });
-      await Api.fetchOrders();
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          auth = r.headers['Authorization'];
+          return http.Response('[]', 200);
+        }),
+      );
+      await api.fetchOrders();
       expect(auth, isNull);
     });
 
+    test("one client's token is not another's", () async {
+      // Two clients can exist at once, so signing in as one user cannot leave
+      // the other carrying their token. This is the bug a single static token
+      // could not even express, let alone test for.
+      String? sentByRavi, sentByAnon;
+      final ravi = ApiClient(
+        httpClient: MockClient((r) async {
+          sentByRavi = r.headers['Authorization'];
+          return http.Response('[]', 200);
+        }),
+      );
+      final anon = ApiClient(
+        httpClient: MockClient((r) async {
+          sentByAnon = r.headers['Authorization'];
+          return http.Response('[]', 200);
+        }),
+      );
+
+      ravi.token = 'ravi-jwt';
+      await ravi.fetchOrders();
+      await anon.fetchOrders();
+
+      expect(sentByRavi, 'Bearer ravi-jwt');
+      expect(sentByAnon, isNull);
+    });
+
     test('logout clears the token', () async {
-      Api.token = 'jwt-here';
-      await Api.logout();
-      expect(Api.token, isNull);
+      api.token = 'jwt-here';
+      await api.logout();
+      expect(api.token, isNull);
     });
   });
 
@@ -179,16 +229,19 @@ void main() {
       // The server must be the one to price the cart. A client that could name
       // a price would be a client that could set its own cost.
       String? body;
-      Api.token = 'jwt';
-      Api.client = MockClient((r) async {
-        body = r.body;
-        return http.Response(
-          '{"id":5,"user_id":17,"customer":"Ravi","total":40,"status":"pending",'
-          '"items":[],"created_at":"","updated_at":""}',
-          201,
-        );
-      });
-      await Api.placeOrder({34: 2, 35: 1});
+
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          body = r.body;
+          return http.Response(
+            '{"id":5,"user_id":17,"customer":"Ravi","total":40,"status":"pending",'
+            '"items":[],"created_at":"","updated_at":""}',
+            201,
+          );
+        }),
+      );
+      api.token = 'jwt';
+      await api.placeOrder({34: 2, 35: 1});
 
       expect(body, contains('"menu_item_id":34'));
       expect(body, contains('"qty":2'));
@@ -196,16 +249,18 @@ void main() {
     });
 
     test('an empty cart is not sent', () async {
-      Api.token = 'jwt';
       bool called = false;
-      Api.client = MockClient((r) async {
-        called = true;
-        return http.Response('{}', 201);
-      });
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          called = true;
+          return http.Response('{}', 201);
+        }),
+      );
+      api.token = 'jwt';
       // The server rejects an empty cart, but the client refuses to spend a
       // request on it and never invents a line to make the request look valid.
       await expectLater(
-        Api.placeOrder({}),
+        api.placeOrder({}),
         throwsA(predicate((e) => e is ApiException && e.statusCode == 400)),
       );
       expect(called, isFalse);

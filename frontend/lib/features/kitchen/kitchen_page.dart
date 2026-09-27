@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/api.dart';
 import '../../core/async_action.dart';
 import '../../core/async_view.dart';
 import '../../core/models.dart';
@@ -39,7 +38,10 @@ class _KitchenPageState extends State<KitchenPage> {
       // The queue is reloaded whether this succeeded or failed. A 409 means the
       // order moved on since this list was fetched, and leaving the stale row in
       // place would leave a button that keeps failing.
-      await runMutation(context, () => Api.setOrderStatus(orderId, status));
+      await runMutation(
+        context,
+        () => SessionScope.read(context).api.setOrderStatus(orderId, status),
+      );
       if (mounted) setState(() => _version++);
     } finally {
       if (mounted) setState(() => _busyOrder = 0);
@@ -84,7 +86,7 @@ class _KitchenPageState extends State<KitchenPage> {
     }
 
     return AsyncView<List<Order>>(
-      load: Api.fetchOrders,
+      load: session.api.fetchOrders,
       refreshable: true,
       refreshToken: _version,
       isEmpty: (orders) => orders.isEmpty,

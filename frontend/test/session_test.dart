@@ -27,8 +27,8 @@ Session signedInSession({
   int balance = 110,
   String name = 'Ravi',
 }) {
-  final s = Session();
-  Api.token = 'jwt-here';
+  final s = Session(api: api);
+  api.token = 'jwt-here';
   s.debugSetUser(
     User(
       id: 17,
@@ -41,16 +41,19 @@ Session signedInSession({
   return s;
 }
 
+/// The client the test talks through. Each test assigns the transport it
+/// needs, so nothing is shared between them.
+late ApiClient api;
+
 void main() {
-  tearDown(() {
-    Api.token = null;
-    Api.client = http.Client();
-  });
+  setUp(() => api = ApiClient());
 
   group('the app requires a login', () {
     testWidgets('starts on the login screen, not the menu', (tester) async {
-      Api.client = MockClient((r) async => http.Response('[]', 200));
-      await tester.pumpWidget(SmartCanteenApp(session: Session()));
+      api = ApiClient(
+        httpClient: MockClient((r) async => http.Response('[]', 200)),
+      );
+      await tester.pumpWidget(SmartCanteenApp(session: Session(api: api)));
 
       expect(find.text('Sign in'), findsOneWidget);
       expect(find.text('Email'), findsOneWidget);
@@ -61,14 +64,16 @@ void main() {
     testWidgets('a successful login shows the menu and the balance', (
       tester,
     ) async {
-      Api.client = MockClient((r) async {
-        if (r.url.path == '/api/auth/login') {
-          return http.Response(_loginOk(balance: 110), 200);
-        }
-        return http.Response('[]', 200);
-      });
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          if (r.url.path == '/api/auth/login') {
+            return http.Response(_loginOk(balance: 110), 200);
+          }
+          return http.Response('[]', 200);
+        }),
+      );
 
-      await tester.pumpWidget(SmartCanteenApp(session: Session()));
+      await tester.pumpWidget(SmartCanteenApp(session: Session(api: api)));
       await tester.enterText(find.byType(TextFormField).first, 'Ravi@x.test');
       await tester.enterText(find.byType(TextFormField).last, 'pw');
       await tester.tap(find.text('Continue'));
@@ -82,12 +87,14 @@ void main() {
     testWidgets('a rejected password keeps the user on the login screen', (
       tester,
     ) async {
-      Api.client = MockClient(
-        (r) async =>
-            http.Response('{"error":"invalid email or password"}', 401),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async =>
+              http.Response('{"error":"invalid email or password"}', 401),
+        ),
       );
 
-      await tester.pumpWidget(SmartCanteenApp(session: Session()));
+      await tester.pumpWidget(SmartCanteenApp(session: Session(api: api)));
       await tester.enterText(find.byType(TextFormField).first, 'ravi@x.test');
       await tester.enterText(find.byType(TextFormField).last, 'wrong');
       await tester.tap(find.text('Continue'));
@@ -100,7 +107,9 @@ void main() {
     testWidgets('signing out returns to login and drops the token', (
       tester,
     ) async {
-      Api.client = MockClient((r) async => http.Response('[]', 200));
+      api = ApiClient(
+        httpClient: MockClient((r) async => http.Response('[]', 200)),
+      );
       await tester.pumpWidget(SmartCanteenApp(session: signedInSession()));
 
       expect(find.text('Menu'), findsWidgets);
@@ -109,30 +118,34 @@ void main() {
 
       expect(find.text('Sign in'), findsOneWidget);
       expect(find.text('Menu'), findsNothing);
-      expect(Api.token, isNull);
+      expect(api.token, isNull);
     });
   });
 
   group('Session', () {
     test('a failed sign-in leaves the session signed out', () async {
-      Api.client = MockClient(
-        (r) async => http.Response('{"error":"no"}', 401),
+      api = ApiClient(
+        httpClient: MockClient(
+          (r) async => http.Response('{"error":"no"}', 401),
+        ),
       );
-      final s = Session();
+      final s = Session(api: api);
 
       await expectLater(
         s.signIn('a@b.test', 'x'),
         throwsA(isA<ApiException>()),
       );
       expect(s.isSignedIn, isFalse);
-      expect(Api.token, isNull);
+      expect(api.token, isNull);
     });
 
     test('refresh adopts the server balance after spending coins', () async {
       // The app bar balance comes from this, so it has to be the server's
       // number after an order rather than a pre-order guess.
       final s = signedInSession(balance: 110);
-      Api.client = MockClient((r) async => http.Response(_meJson, 200));
+      api = ApiClient(
+        httpClient: MockClient((r) async => http.Response(_meJson, 200)),
+      );
 
       await s.refresh();
 
@@ -143,15 +156,18 @@ void main() {
       'an expired token signs the user out instead of stranding them',
       () async {
         // A shell whose every request 401s is worse than the login screen.
-        final s = signedInSession();
-        Api.client = MockClient(
-          (r) async => http.Response('{"error":"expired"}', 401),
+        // The client goes in first: the session holds the one it was built with.
+        api = ApiClient(
+          httpClient: MockClient(
+            (r) async => http.Response('{"error":"expired"}', 401),
+          ),
         );
+        final s = signedInSession();
 
         await s.refresh();
 
         expect(s.isSignedIn, isFalse);
-        expect(Api.token, isNull);
+        expect(api.token, isNull);
       },
     );
 
@@ -159,7 +175,9 @@ void main() {
       // Throwing someone out over a dropped connection is a worse outcome than
       // a balance that is briefly stale.
       final s = signedInSession(balance: 110);
-      Api.client = MockClient((r) async => http.Response('gateway down', 502));
+      api = ApiClient(
+        httpClient: MockClient((r) async => http.Response('gateway down', 502)),
+      );
 
       await s.refresh();
 
@@ -181,11 +199,13 @@ void main() {
 
     test('signing in trims the email, since a stray space is a typo', () async {
       String? body;
-      Api.client = MockClient((r) async {
-        body = r.body;
-        return http.Response(_loginOk(), 200);
-      });
-      await Session().signIn('  ravi@x.test  ', 'pw');
+      api = ApiClient(
+        httpClient: MockClient((r) async {
+          body = r.body;
+          return http.Response(_loginOk(), 200);
+        }),
+      );
+      await Session(api: api).signIn('  ravi@x.test  ', 'pw');
 
       expect(body, contains('ravi@x.test'));
       expect(body, isNot(contains('  ravi')));
