@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'async_action.dart';
 import 'async_view.dart';
-import 'failure_text.dart';
 import 'models.dart';
 import 'session.dart';
 
@@ -33,33 +33,19 @@ class _AdminPageState extends State<AdminPage> {
 
     setState(() => _busy = true);
     try {
-      final updated = await Api.exchangeCoins(
-        target.id,
-        result.amount,
-        result.reason,
+      final updated = await runMutation(
+        context,
+        () => Api.exchangeCoins(target.id, result.amount, result.reason),
       );
-      if (!mounted) return;
+      if (updated == null || !mounted) return;
       setState(() => _version++);
-      _toast('${updated.name} now has ${updated.coinBalance} coins');
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (needsSignOut(e)) {
-        final session = SessionScope.read(context);
-        await session.signOut();
-        return;
-      }
-      _toast(failureMessage(e));
-    } on Exception catch (e) {
-      if (mounted) _toast(failureMessage(ApiException.networkFailure(e)));
+      showMessage(
+        context,
+        '${updated.name} now has ${updated.coinBalance} coins',
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

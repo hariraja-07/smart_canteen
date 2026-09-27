@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'async_action.dart';
 import 'async_view.dart';
-import 'failure_text.dart';
 import 'models.dart';
 import 'orders_page.dart';
 import 'session.dart';
@@ -34,34 +34,16 @@ class _KitchenPageState extends State<KitchenPage> {
   }
 
   Future<void> _apply(int orderId, String status) async {
-    final session = SessionScope.read(context);
     setState(() => _busyOrder = orderId);
     try {
-      await Api.setOrderStatus(orderId, status);
-      if (!mounted) return;
-      setState(() => _version++);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (needsSignOut(e)) {
-        await session.signOut();
-        return;
-      }
-      // The queue is reloaded on failure as well as success, because a 409
-      // means the order moved on since this list was fetched. Leaving the stale
-      // row in place would leave a button that keeps failing.
-      _toast(failureMessage(e));
-      setState(() => _version++);
-    } on Exception catch (e) {
-      if (mounted) _toast(failureMessage(ApiException.networkFailure(e)));
+      // The queue is reloaded whether this succeeded or failed. A 409 means the
+      // order moved on since this list was fetched, and leaving the stale row in
+      // place would leave a button that keeps failing.
+      await runMutation(context, () => Api.setOrderStatus(orderId, status));
+      if (mounted) setState(() => _version++);
     } finally {
       if (mounted) setState(() => _busyOrder = 0);
     }
-  }
-
-  void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Cancelling refunds the customer, so it asks first. A tap that gives the

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'async_action.dart';
 import 'cart.dart';
-import 'failure_text.dart';
 import 'models.dart';
 import 'session.dart';
 
@@ -31,24 +31,20 @@ class _CartPageState extends State<CartPage> {
 
     setState(() => _placing = true);
     try {
-      final order = await Api.placeOrder(cart.toRequest());
+      final order = await runMutation(
+        context,
+        () => Api.placeOrder(cart.toRequest()),
+      );
+      if (order == null) return;
+      // Cleared before the balance is refreshed. If the refresh were to fail,
+      // the cart would still hold an order the server has already accepted,
+      // and the next tap would place it a second time.
       cart.clear();
       // The balance in the app bar is the server's number, and this order
       // changed it.
       await session.refresh();
       if (!mounted) return;
       _confirm(order);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (needsSignOut(e)) {
-        // The token is gone, so every other screen would fail too. Sign out
-        // rather than leave the user tapping a button that cannot work.
-        await session.signOut();
-        return;
-      }
-      _fail(e);
-    } on Exception catch (e) {
-      if (mounted) _fail(ApiException.networkFailure(e));
     } finally {
       if (mounted) setState(() => _placing = false);
     }
@@ -78,12 +74,6 @@ class _CartPageState extends State<CartPage> {
         ],
       ),
     );
-  }
-
-  void _fail(ApiException e) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(failureMessage(e))));
   }
 
   @override
