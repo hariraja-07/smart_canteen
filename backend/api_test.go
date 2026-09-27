@@ -20,20 +20,25 @@ import (
 // These are integration tests: they need a real Postgres, because the
 // behaviour under test is largely database behaviour, including the row locks
 // that stop two orders spending the same coins. Point TEST_DATABASE_URL at a
-// throwaway database; without it the suite skips rather than failing.
+// throwaway database; without it the database tests skip rather than failing.
 
 const testSecret = "test-secret-that-is-long-enough-32"
 
 var testDB *sql.DB
 
 func TestMain(m *testing.M) {
+	// Only TEST_DATABASE_URL, deliberately not DATABASE_URL. The suite writes
+	// balances, places orders and injects drift on purpose, so falling back to
+	// whatever DATABASE_URL happens to be set would let a routine `go test`
+	// corrupt a real database. TEST_DATABASE_URL is the explicit "this is
+	// disposable" signal.
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
-		url = os.Getenv("DATABASE_URL")
-	}
-	if url == "" {
-		fmt.Println("TEST_DATABASE_URL not set, skipping integration tests")
-		os.Exit(0)
+		// Run the suite anyway. Tests that need a database call
+		// requireTestDB and skip; the rest are ordinary unit tests that need
+		// no external service and must not be skipped along with them.
+		fmt.Println("TEST_DATABASE_URL not set: database tests will be skipped")
+		os.Exit(m.Run())
 	}
 	db, err := sql.Open("pgx", url)
 	if err != nil {
@@ -48,6 +53,14 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	db.Close()
 	os.Exit(code)
+}
+
+// requireTestDB skips a test that needs a database when none is configured.
+func requireTestDB(t *testing.T) {
+	t.Helper()
+	if testDB == nil {
+		t.Skip("needs TEST_DATABASE_URL pointing at a throwaway database")
+	}
 }
 
 // --- helpers ---
@@ -187,6 +200,8 @@ func canteenUser(t *testing.T) User {
 // --- auth ---
 
 func TestLoginRejectsBadCredentials(t *testing.T) {
+	requireTestDB(t)
+
 	u := newTestUser(t, RoleStudent, 10)
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
 	defer srv.Close()
@@ -217,6 +232,8 @@ func TestLoginRejectsBadCredentials(t *testing.T) {
 }
 
 func TestProtectedRoutesRejectMissingToken(t *testing.T) {
+	requireTestDB(t)
+
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
 	defer srv.Close()
 	for _, path := range []string{
@@ -232,6 +249,8 @@ func TestProtectedRoutesRejectMissingToken(t *testing.T) {
 }
 
 func TestRoleGuards(t *testing.T) {
+	requireTestDB(t)
+
 	student := newTestUser(t, RoleStudent, 0)
 	canteen := newTestUser(t, RoleCanteenManagement, 0)
 	admin := newTestUser(t, RoleAdmin, 0)
@@ -290,6 +309,8 @@ func TestRoleGuards(t *testing.T) {
 }
 
 func TestCoinHistoryIsScoped(t *testing.T) {
+	requireTestDB(t)
+
 	owner := newTestUser(t, RoleStudent, 50)
 	other := newTestUser(t, RoleStudent, 0)
 	admin := newTestUser(t, RoleAdmin, 0)
@@ -320,6 +341,8 @@ func TestCoinHistoryIsScoped(t *testing.T) {
 }
 
 func TestResponseNeverLeaksPasswordHash(t *testing.T) {
+	requireTestDB(t)
+
 	u := newTestUser(t, RoleStudent, 5)
 	admin := newTestUser(t, RoleAdmin, 0)
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
@@ -338,6 +361,8 @@ func TestResponseNeverLeaksPasswordHash(t *testing.T) {
 // --- routing ---
 
 func TestUnmatchedPathIsNotSilentlySuccessful(t *testing.T) {
+	requireTestDB(t)
+
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
 	defer srv.Close()
 	// A bare "/" catch-all once answered these with 200 "Hello World" before any
@@ -363,6 +388,8 @@ func TestUnmatchedPathIsNotSilentlySuccessful(t *testing.T) {
 // --- coin exchange ---
 
 func TestExchangeValidation(t *testing.T) {
+	requireTestDB(t)
+
 	admin := newTestUser(t, RoleAdmin, 0)
 	target := newTestUser(t, RoleStudent, 0)
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
@@ -391,6 +418,8 @@ func TestExchangeValidation(t *testing.T) {
 }
 
 func TestExchangeMovesBothCacheAndLedger(t *testing.T) {
+	requireTestDB(t)
+
 	admin := newTestUser(t, RoleAdmin, 0)
 	target := newTestUser(t, RoleStudent, 0)
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
@@ -414,6 +443,8 @@ func TestExchangeMovesBothCacheAndLedger(t *testing.T) {
 // --- orders ---
 
 func TestPlaceOrderDebitsStudentAndCreditsCanteen(t *testing.T) {
+	requireTestDB(t)
+
 	canteen := canteenUser(t)
 	student := newTestUser(t, RoleStudent, 0)
 	item, price := someMenuItem(t)
@@ -469,6 +500,8 @@ SELECT kind, amount, group_id FROM coin_transactions WHERE order_id = $1 ORDER B
 }
 
 func TestPlaceOrderRejectsBadCarts(t *testing.T) {
+	requireTestDB(t)
+
 	student := newTestUser(t, RoleStudent, 0)
 	item, _ := someMenuItem(t)
 	srv := httptest.NewServer(newRouter(testDB, testSecret))
@@ -496,6 +529,8 @@ func TestPlaceOrderRejectsBadCarts(t *testing.T) {
 }
 
 func TestOrderBeyondBalanceIsRejected(t *testing.T) {
+	requireTestDB(t)
+
 	student := newTestUser(t, RoleStudent, 0)
 	item, price := someMenuItem(t)
 	admin := newTestUser(t, RoleAdmin, 0)
@@ -515,6 +550,8 @@ func TestOrderBeyondBalanceIsRejected(t *testing.T) {
 }
 
 func TestListOrdersIsScopedByRole(t *testing.T) {
+	requireTestDB(t)
+
 	ravi := newTestUser(t, RoleStudent, 500)
 	priya := newTestUser(t, RoleStudent, 500)
 	canteen := canteenUser(t)
@@ -556,6 +593,8 @@ func TestListOrdersIsScopedByRole(t *testing.T) {
 }
 
 func TestStatusTransitionsFollowStateMachine(t *testing.T) {
+	requireTestDB(t)
+
 	canteen := canteenUser(t)
 	student := newTestUser(t, RoleStudent, 500)
 	item, _ := someMenuItem(t)
@@ -592,6 +631,8 @@ func TestStatusTransitionsFollowStateMachine(t *testing.T) {
 }
 
 func TestCancelRefundsExactlyOnce(t *testing.T) {
+	requireTestDB(t)
+
 	canteen := canteenUser(t)
 	student := newTestUser(t, RoleStudent, 500)
 	admin := newTestUser(t, RoleAdmin, 0)
@@ -652,6 +693,8 @@ func TestCancelRefundsExactlyOnce(t *testing.T) {
 }
 
 func TestUnavailableItemIsAClientErrorNotAServerError(t *testing.T) {
+	requireTestDB(t)
+
 	// A sold-out or withdrawn item is the caller's problem, so 400. A deadlock or
 	// a dropped connection is ours and must be 500, because retrying is the right
 	// client response. Collapsing both into 400 would tell a user their cart was
@@ -681,6 +724,8 @@ func TestUnavailableItemIsAClientErrorNotAServerError(t *testing.T) {
 }
 
 func TestConcurrentOrdersCannotOverspend(t *testing.T) {
+	requireTestDB(t)
+
 	// This is the regression test for the FK KEY SHARE deadlock. orders.user_id
 	// takes a KEY SHARE lock on the user; the balance update needs to upgrade it.
 	// Without locking the customer first, enough concurrent orders deadlock.
@@ -732,6 +777,8 @@ func TestConcurrentOrdersCannotOverspend(t *testing.T) {
 }
 
 func TestReconcileDetectsInjectedDrift(t *testing.T) {
+	requireTestDB(t)
+
 	u := newTestUser(t, RoleStudent, 42)
 	// corrupt the cache without a matching ledger entry
 	if _, err := testDB.Exec(
@@ -766,6 +813,8 @@ func TestReconcileDetectsInjectedDrift(t *testing.T) {
 // Measured as deltas because this suite shares one database across runs, so
 // absolute totals depend on what earlier tests left behind.
 func TestSummaryIsNetOfRefunds(t *testing.T) {
+	requireTestDB(t)
+
 	canteen := canteenUser(t)
 	student := newTestUser(t, RoleStudent, 500)
 	item, price := someMenuItem(t)
