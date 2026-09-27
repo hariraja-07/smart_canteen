@@ -870,3 +870,98 @@ func TestSummaryIsNetOfRefunds(t *testing.T) {
 
 	assertLedgerConsistent(t)
 }
+
+// --- menu ---
+
+// The menu is the one endpoint anyone can read without signing in, and it had
+// no Go test at all: its shape was only ever checked by the live contract
+// script, which needs a running server. These need a database but no socket.
+
+func TestMenuNeedsNoTokenAndReturnsWholeCoinPrices(t *testing.T) {
+	requireTestDB(t)
+
+	srv := httptest.NewServer(newRouter(testDB, testSecret))
+	defer srv.Close()
+
+	resp, body := doJSON(t, "GET", srv.URL+"/api/menu", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("menu: got %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+
+	var dishes []map[string]json.RawMessage
+	decodeInto(t, body, &dishes)
+	if len(dishes) == 0 {
+		t.Fatal("menu is empty; the seed data should provide items")
+	}
+
+	for i, d := range dishes {
+		for _, k := range []string{"id", "name", "category", "price", "description", "available"} {
+			if _, ok := d[k]; !ok {
+				t.Errorf("dish %d: missing %q, keys were %v", i, k, keysOf(t, d))
+			}
+		}
+
+		// The whole-coin rule, checked on the wire rather than in Go. The
+		// database refuses a fractional price, so anything with a decimal point
+		// or an exponent here means the type changed back to a float and a
+		// client would be handed "2.0e+01" to parse as money.
+		raw := string(d["price"])
+		if strings.ContainsAny(raw, ".eE") {
+			t.Errorf("dish %d: price is %s, want a whole number", i, raw)
+		}
+		var price int
+		if err := json.Unmarshal(d["price"], &price); err != nil {
+			t.Errorf("dish %d: price %s does not decode as an integer: %v", i, raw, err)
+		} else if price < 0 {
+			t.Errorf("dish %d: price %d is negative", i, price)
+		}
+	}
+}
+
+// A dish nobody can afford is still listed and still priced; the client
+// disables the button. Hiding it would make the menu look broken.
+func TestMenuListsUnavailableItemsWithTheirPrice(t *testing.T) {
+	requireTestDB(t)
+
+	// The seeded menu happens to have every item available, so this inserts its
+	// own unavailable dish rather than skipping whenever the seed data changes.
+	// It is removed afterwards: leaving rows behind would grow the test database
+	// on every run. A price of 7 is arbitrary; what matters is that it survives
+	// the round trip intact.
+	var id int64
+	if err := testDB.QueryRow(`
+INSERT INTO menu_items (name, category, price, description, available)
+VALUES ('test sold out', 'test', 7, 'fixture', false)
+RETURNING id`).Scan(&id); err != nil {
+		t.Fatalf("insert unavailable dish: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := testDB.Exec(`DELETE FROM menu_items WHERE id = $1`, id); err != nil {
+			t.Logf("clean up dish %d: %v", id, err)
+		}
+	})
+	const price = 7
+
+	srv := httptest.NewServer(newRouter(testDB, testSecret))
+	defer srv.Close()
+
+	resp, body := doJSON(t, "GET", srv.URL+"/api/menu", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("menu: got %d, want 200", resp.StatusCode)
+	}
+
+	var dishes []menuItemResponse
+	decodeInto(t, body, &dishes)
+	for _, d := range dishes {
+		if d.ID == id {
+			if d.Available {
+				t.Errorf("dish %d: reported available, want unavailable", id)
+			}
+			if d.Price != price {
+				t.Errorf("dish %d: price %d, want %d", id, d.Price, price)
+			}
+			return
+		}
+	}
+	t.Errorf("unavailable dish %d missing from the menu", id)
+}

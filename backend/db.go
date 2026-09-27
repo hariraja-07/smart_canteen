@@ -12,7 +12,7 @@ type MenuItem struct {
 	ID          int64
 	Name        string
 	Category    string
-	Price       float64
+	Price       int
 	Description string
 	Available   bool
 }

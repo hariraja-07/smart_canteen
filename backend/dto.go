@@ -64,12 +64,12 @@ type loginResponse struct {
 }
 
 type menuItemResponse struct {
-	ID          int64   `json:"id"`
-	Name        string  `json:"name"`
-	Category    string  `json:"category"`
-	Price       float64 `json:"price"`
-	Description string  `json:"description"`
-	Available   bool    `json:"available"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Price       int    `json:"price"`
+	Description string `json:"description"`
+	Available   bool   `json:"available"`
 }
 
 type orderItemResponse struct {
