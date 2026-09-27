@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,6 +29,11 @@ func main() {
 	}
 	defer db.Close()
 
+	secret, err := jwtSecret()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello World")
@@ -45,10 +52,67 @@ func main() {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(items)
+		writeJSON(w, http.StatusOK, items)
 	})
+	mux.HandleFunc("/api/auth/login", loginHandler(db, secret))
 
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
+}
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type loginResponse struct {
+	User
+	Token string `json:"token"`
+}
+
+func loginHandler(db *sql.DB, secret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		var req loginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+
+		user, err := authenticate(db, req.Email, req.Password)
+		if err != nil {
+			if errors.Is(err, errBadCredentials) {
+				// Same response either way: never reveal which emails exist.
+				writeError(w, http.StatusUnauthorized, "invalid email or password")
+				return
+			}
+			log.Printf("login: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+		token, err := signToken(user, secret)
+		if err != nil {
+			log.Printf("login: sign token: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		writeJSON(w, http.StatusOK, loginResponse{User: user, Token: token})
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("write response: %v", err)
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
 }
