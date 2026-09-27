@@ -15,6 +15,11 @@ class AsyncView<T> extends StatefulWidget {
   /// change underneath them.
   final bool refreshable;
 
+  /// Changing this reloads the data. A screen that mutates the list, like
+  /// advancing an order, bumps the token instead of reaching into this widget
+  /// to restart its own future.
+  final Object? refreshToken;
+
   const AsyncView({
     super.key,
     required this.load,
@@ -22,6 +27,7 @@ class AsyncView<T> extends StatefulWidget {
     this.emptyMessage,
     this.isEmpty,
     this.refreshable = false,
+    this.refreshToken,
   });
 
   @override
@@ -35,6 +41,16 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
   void initState() {
     super.initState();
     _future = widget.load();
+  }
+
+  @override
+  void didUpdateWidget(AsyncView<T> old) {
+    super.didUpdateWidget(old);
+    // No setState here: didUpdateWidget already runs inside a rebuild, and
+    // calling it again would be the error setState exists to prevent.
+    if (widget.refreshToken != old.refreshToken) {
+      _future = widget.load();
+    }
   }
 
   void _reload() {

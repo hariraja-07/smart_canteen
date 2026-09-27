@@ -88,8 +88,40 @@ class OrderStatus {
   static const completed = 'completed';
   static const cancelled = 'cancelled';
 
-  /// The states a kitchen operator can still act on.
-  static const actionable = [pending, preparing, ready];
+  /// The one step the kitchen can take from here, or null when the order is
+  /// finished. Mirrors the server's state machine so the button offered is the
+  /// transition the server will accept; the server still has the final say.
+  static String? next(String status) {
+    switch (status) {
+      case pending:
+        return preparing;
+      case preparing:
+        return ready;
+      case ready:
+        return completed;
+      default:
+        return null;
+    }
+  }
+
+  /// Cancellable until it is collected, because a customer can walk away up to
+  /// that point and the refund is written to the ledger either way.
+  static bool canCancel(String status) =>
+      status == pending || status == preparing || status == ready;
+
+  /// The label on the button that takes [next].
+  static String actionLabel(String from) {
+    switch (from) {
+      case pending:
+        return 'Start preparing';
+      case preparing:
+        return 'Mark ready';
+      case ready:
+        return 'Hand over';
+      default:
+        return 'Advance';
+    }
+  }
 
   static String label(String status) {
     switch (status) {

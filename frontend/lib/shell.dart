@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cart.dart';
 import 'cart_page.dart';
 import 'coins_page.dart';
+import 'kitchen_page.dart';
 import 'menu_page.dart';
 import 'orders_page.dart';
 import 'session.dart';
@@ -48,6 +49,14 @@ class _ShellState extends State<Shell> {
         label: 'Orders',
         page: OrdersPage(),
       ),
+      // Only for the roles the server lets near the whole queue. A student
+      // never sees this tab, so they are never offered a screen that 403s.
+      if (session.canManageKitchen)
+        const _ShellTab(
+          icon: Icons.kitchen,
+          label: 'Kitchen',
+          page: KitchenPage(),
+        ),
       const _ShellTab(
         icon: Icons.account_balance_wallet,
         label: 'Coins',
