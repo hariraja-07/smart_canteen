@@ -44,8 +44,7 @@ students.csv holds one email,name,role,coins record per line, for example:
 
 func runCLI(args []string) int {
 	if len(args) == 0 {
-		fmt.Print(usage)
-		return 2
+		return runServe()
 	}
 	switch args[0] {
 	case "serve":

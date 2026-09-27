@@ -63,9 +63,39 @@ func runServe() int {
 	})
 	mux.HandleFunc("/api/auth/login", loginHandler(db, secret))
 
+	// Authenticated: who am I.
+	mux.Handle("/api/me", requireAuth(db, secret, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := userFromContext(r)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		writeJSON(w, http.StatusOK, user)
+	})))
+
+	// Admin only: the roster.
+	mux.Handle("/api/admin/users", requireRole(db, secret, []string{RoleAdmin},
+		http.HandlerFunc(listUsersHandler(db))))
+
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
 	return 0
+}
+
+func listUsersHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		users, err := listUsers(db)
+		if err != nil {
+			log.Printf("list users: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		writeJSON(w, http.StatusOK, users)
+	}
 }
 
 type loginRequest struct {

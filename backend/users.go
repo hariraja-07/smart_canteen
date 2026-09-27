@@ -88,6 +88,29 @@ SELECT id, name, email, role, coin_balance, password_hash
 FROM users WHERE id = $1`, id))
 }
 
+// listUsers returns the roster for the admin view, highest balance first so the
+// accounts that matter most are at the top.
+func listUsers(db *sql.DB) ([]User, error) {
+	rows, err := db.Query(`
+SELECT id, name, email, role, coin_balance, password_hash
+FROM users
+ORDER BY coin_balance DESC, name`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := []User{}
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.CoinBalance, &u.PasswordHash); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 func scanUser(row *sql.Row) (User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.CoinBalance, &u.PasswordHash)
