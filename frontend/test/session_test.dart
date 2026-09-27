@@ -74,7 +74,7 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Menu'), findsWidgets);
       expect(find.text('110 coins'), findsOneWidget);
       expect(find.text('Ravi'), findsNothing);
     });
@@ -103,7 +103,7 @@ void main() {
       Api.client = MockClient((r) async => http.Response('[]', 200));
       await tester.pumpWidget(SmartCanteenApp(session: signedInSession()));
 
-      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Menu'), findsWidgets);
       await tester.tap(find.byTooltip('Sign out'));
       await tester.pumpAndSettle();
 

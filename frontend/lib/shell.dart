@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'coins_page.dart';
 import 'menu_page.dart';
+import 'orders_page.dart';
 import 'session.dart';
 
 /// The signed-in app. Which tabs exist is decided by the role, so a student is
@@ -26,6 +28,16 @@ class _ShellState extends State<Shell> {
     // the previous one selected and pointing at the wrong index.
     final tabs = <_ShellTab>[
       const _ShellTab(icon: Icons.restaurant, label: 'Menu', page: MenuPage()),
+      const _ShellTab(
+        icon: Icons.receipt_long,
+        label: 'Orders',
+        page: OrdersPage(),
+      ),
+      const _ShellTab(
+        icon: Icons.account_balance_wallet,
+        label: 'Coins',
+        page: CoinsPage(),
+      ),
     ];
     final safeIndex = _index.clamp(0, tabs.length - 1);
 

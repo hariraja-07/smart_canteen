@@ -1,56 +1,21 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'async_view.dart';
 import 'models.dart';
 
 /// The menu body, with no Scaffold of its own. The shell provides the app bar
 /// and navigation, so embedding this in a tab must not produce two app bars.
-class MenuPage extends StatefulWidget {
+class MenuPage extends StatelessWidget {
   const MenuPage({super.key});
 
   @override
-  State<MenuPage> createState() => _MenuPageState();
-}
-
-class _MenuPageState extends State<MenuPage> {
-  Future<List<Dish>>? _menuFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _menuFuture = Api.fetchMenu();
-  }
-
-  void _retry() {
-    setState(() {
-      _menuFuture = Api.fetchMenu();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Dish>>(
-      future: _menuFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Error: ${snapshot.error}'),
-                const SizedBox(height: 12),
-                FilledButton(onPressed: _retry, child: const Text('Retry')),
-              ],
-            ),
-          );
-        }
-        return _MenuList(dishes: snapshot.data!);
-      },
+    return AsyncView<List<Dish>>(
+      load: Api.fetchMenu,
+      isEmpty: (dishes) => dishes.isEmpty,
+      emptyMessage: 'No dishes available',
+      builder: (context, dishes) => _MenuList(dishes: dishes),
     );
   }
 }
@@ -62,9 +27,6 @@ class _MenuList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (dishes.isEmpty) {
-      return const Center(child: Text('No dishes available'));
-    }
     // Grouped by category, in the order the categories first appear, so the
     // layout matches the order the canteen listed them in.
     final byCategory = <String, List<Dish>>{};
