@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'api.dart';
-import 'async_action.dart';
-import 'async_view.dart';
-import 'models.dart';
-import 'orders_page.dart';
-import 'session.dart';
+import '../../core/api.dart';
+import '../../core/async_action.dart';
+import '../../core/async_view.dart';
+import '../../core/models.dart';
+import '../../core/session.dart';
+import '../orders/orders_page.dart';
 
 /// The kitchen queue: every order, with the one step each is waiting for.
 ///

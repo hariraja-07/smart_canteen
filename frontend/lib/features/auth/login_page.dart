@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'api.dart';
-import 'failure_text.dart';
-import 'session.dart';
+import '../../core/api.dart';
+import '../../core/failure_text.dart';
+import '../../core/session.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'api.dart';
-import 'async_view.dart';
-import 'cart.dart';
-import 'models.dart';
+import '../../core/api.dart';
+import '../../core/async_view.dart';
+import '../../core/cart.dart';
+import '../../core/models.dart';
 
 /// The menu body, with no Scaffold of its own. The shell provides the app bar
 /// and navigation, so embedding this in a tab must not produce two app bars.

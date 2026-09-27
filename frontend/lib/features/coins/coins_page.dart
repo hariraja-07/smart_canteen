@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'api.dart';
-import 'async_view.dart';
-import 'models.dart';
-import 'session.dart';
+import '../../core/api.dart';
+import '../../core/async_view.dart';
+import '../../core/models.dart';
+import '../../core/session.dart';
 
 /// The user's coin history: every mint, payment, and refund, newest first.
 ///

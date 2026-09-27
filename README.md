@@ -150,7 +150,7 @@ cd frontend
 flutter run
 ```
 
-Connects to `http://localhost:8080` (`frontend/lib/api.dart`). On a physical
+Connects to `http://localhost:8080` (`frontend/lib/core/api.dart`). On a physical
 phone over USB, forward the port first, or the app will find no server:
 
 ```sh
@@ -162,6 +162,28 @@ queue with status controls for the canteen and admin; the roster and coin
 exchange for the admin. A request that fails is answered by what went wrong, not
 by one generic error: not enough coins says to visit the counter, a server fault
 says to retry, and an expired token returns to login.
+
+### Layout
+
+```text
+lib/
+  main.dart              entry point only
+  app.dart               the app widget, its theme, and the sign-in gate
+  core/                  shared, knows nothing about which screen it is on
+    api.dart             HTTP client and ApiException
+    models.dart          Dish, User, Order, CoinEntry
+    session.dart         who is signed in, and SessionScope
+    cart.dart            what is in the cart, and CartScope
+    failure_text.dart    what a failure says
+    async_action.dart    runMutation: the failure half of every button press
+    async_view.dart      a future as a widget, with retry
+  features/              one folder per screen
+    auth/  menu/  cart/  orders/  kitchen/  admin/  coins/
+    shell.dart           the signed-in tab scaffold
+```
+
+A feature may import `core/`. `core/` does not import `features/`, which is what
+keeps the shared code from quietly becoming screen-specific.
 
 ## Docker
 

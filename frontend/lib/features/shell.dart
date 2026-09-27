@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import 'admin_page.dart';
-import 'cart.dart';
-import 'cart_page.dart';
-import 'coins_page.dart';
-import 'kitchen_page.dart';
-import 'menu_page.dart';
-import 'orders_page.dart';
-import 'session.dart';
+import '../core/cart.dart';
+import '../core/session.dart';
+import 'admin/admin_page.dart';
+import 'cart/cart_page.dart';
+import 'coins/coins_page.dart';
+import 'kitchen/kitchen_page.dart';
+import 'menu/menu_page.dart';
+import 'orders/orders_page.dart';
 
 /// The signed-in app. Which tabs exist is decided by the role, so a student is
 /// never shown a kitchen queue they cannot read.

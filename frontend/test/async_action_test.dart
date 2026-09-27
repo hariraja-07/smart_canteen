@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:frontend/api.dart';
-import 'package:frontend/async_action.dart';
-import 'package:frontend/failure_text.dart';
-import 'package:frontend/models.dart';
-import 'package:frontend/session.dart';
+import 'package:frontend/core/api.dart';
+import 'package:frontend/core/async_action.dart';
+import 'package:frontend/core/failure_text.dart';
+import 'package:frontend/core/models.dart';
+import 'package:frontend/core/session.dart';
 
 /// [runMutation] decides what a failed request does to the user: it reports the
 /// message, or signs them out when the session has ended. Both paths end the

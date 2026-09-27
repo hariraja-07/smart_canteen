@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:frontend/api.dart';
-import 'package:frontend/main.dart';
-import 'package:frontend/models.dart';
-import 'package:frontend/session.dart';
+import 'package:frontend/core/api.dart';
+import 'package:frontend/app.dart';
+import 'package:frontend/core/models.dart';
+import 'package:frontend/core/session.dart';
 
 Session signedIn({String role = Role.admin}) {
   final s = Session();

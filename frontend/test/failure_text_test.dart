@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/api.dart';
-import 'package:frontend/failure_text.dart';
+import 'package:frontend/core/api.dart';
+import 'package:frontend/core/failure_text.dart';
 
 void main() {
   group('needsSignOut', () {

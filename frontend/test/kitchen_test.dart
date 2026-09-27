@@ -5,12 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:frontend/api.dart';
-import 'package:frontend/cart.dart';
-import 'package:frontend/failure_text.dart';
-import 'package:frontend/main.dart';
-import 'package:frontend/models.dart';
-import 'package:frontend/session.dart';
+import 'package:frontend/core/api.dart';
+import 'package:frontend/core/cart.dart';
+import 'package:frontend/core/failure_text.dart';
+import 'package:frontend/app.dart';
+import 'package:frontend/core/models.dart';
+import 'package:frontend/core/session.dart';
 
 const _chai = Dish(
   id: 2,
