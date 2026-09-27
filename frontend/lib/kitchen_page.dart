@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'async_view.dart';
+import 'failure_text.dart';
 import 'models.dart';
 import 'orders_page.dart';
 import 'session.dart';
@@ -41,23 +42,17 @@ class _KitchenPageState extends State<KitchenPage> {
       setState(() => _version++);
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.isUnauthorized) {
+      if (needsSignOut(e)) {
         await session.signOut();
         return;
       }
-      // A 409 means the order moved on since this list was fetched, so the
-      // message is shown and the queue reloaded rather than leaving a row that
-      // will keep failing.
-      _toast(
-        e.statusCode == 409
-            ? e.message
-            : e.isRetryable
-            ? 'The canteen server had a problem. Try again.'
-            : e.message,
-      );
+      // The queue is reloaded on failure as well as success, because a 409
+      // means the order moved on since this list was fetched. Leaving the stale
+      // row in place would leave a button that keeps failing.
+      _toast(failureMessage(e));
       setState(() => _version++);
     } on Exception catch (e) {
-      if (mounted) _toast('Could not reach the server: $e');
+      if (mounted) _toast(failureMessage(ApiException.networkFailure(e)));
     } finally {
       if (mounted) setState(() => _busyOrder = 0);
     }

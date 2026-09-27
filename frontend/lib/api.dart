@@ -17,6 +17,13 @@ class ApiException implements Exception {
 
   ApiException(this.statusCode, this.message);
 
+  /// The request never reached the server, so there is no HTTP status to
+  /// report. A named constructor rather than a literal `ApiException(0, ...)`,
+  /// because status 0 means nothing and nothing would stop a future caller
+  /// writing it by accident and having it read as "unreachable".
+  ApiException.networkFailure(Object cause)
+    : this(0, 'Could not reach the canteen server: $cause');
+
   /// The session is gone or was never valid.
   bool get isUnauthorized => statusCode == 401;
 

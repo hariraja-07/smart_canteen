@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'cart.dart';
+import 'failure_text.dart';
 import 'models.dart';
 import 'session.dart';
 
@@ -39,7 +40,7 @@ class _CartPageState extends State<CartPage> {
       _confirm(order);
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.isUnauthorized) {
+      if (needsSignOut(e)) {
         // The token is gone, so every other screen would fail too. Sign out
         // rather than leave the user tapping a button that cannot work.
         await session.signOut();
@@ -47,7 +48,7 @@ class _CartPageState extends State<CartPage> {
       }
       _fail(e);
     } on Exception catch (e) {
-      if (mounted) _fail(ApiException(0, 'Could not reach the server: $e'));
+      if (mounted) _fail(ApiException.networkFailure(e));
     } finally {
       if (mounted) setState(() => _placing = false);
     }
@@ -80,15 +81,9 @@ class _CartPageState extends State<CartPage> {
   }
 
   void _fail(ApiException e) {
-    final message = e.isPaymentRequired
-        // The one failure a user can actually act on, so it says what to do.
-        ? 'Not enough coins. Visit the canteen counter to top up.'
-        : e.isRetryable
-        ? 'The canteen server had a problem. Try again in a moment.'
-        : e.message;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(failureMessage(e))));
   }
 
   @override

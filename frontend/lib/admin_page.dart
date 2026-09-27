@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'async_view.dart';
+import 'failure_text.dart';
 import 'models.dart';
 import 'session.dart';
 
@@ -42,18 +43,14 @@ class _AdminPageState extends State<AdminPage> {
       _toast('${updated.name} now has ${updated.coinBalance} coins');
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.isUnauthorized) {
+      if (needsSignOut(e)) {
         final session = SessionScope.read(context);
         await session.signOut();
         return;
       }
-      _toast(
-        e.isRetryable
-            ? 'The canteen server had a problem. Try again.'
-            : e.message,
-      );
+      _toast(failureMessage(e));
     } on Exception catch (e) {
-      if (mounted) _toast('Could not reach the server: $e');
+      if (mounted) _toast(failureMessage(ApiException.networkFailure(e)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

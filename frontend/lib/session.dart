@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'api.dart';
+import 'failure_text.dart';
 import 'models.dart';
 
 /// Who is signed in, and what that lets them reach.
@@ -61,7 +62,7 @@ class Session extends ChangeNotifier {
     try {
       _user = await Api.me();
     } on ApiException catch (e) {
-      if (e.isUnauthorized) {
+      if (needsSignOut(e)) {
         // The token expired or was revoked. Keeping a shell the user can no
         // longer act in would strand them on screens that only fail, so sign
         // out and let them sign back in.

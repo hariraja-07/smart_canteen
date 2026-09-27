@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 
 import 'package:frontend/api.dart';
 import 'package:frontend/cart.dart';
+import 'package:frontend/failure_text.dart';
 import 'package:frontend/main.dart';
 import 'package:frontend/models.dart';
 import 'package:frontend/session.dart';
@@ -331,7 +332,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('The canteen server had a problem. Try again.'),
+        // The wording comes from failure_text.dart, shared with every page.
+        find.text(failureMessage(ApiException(500, 'internal error'))),
         findsOneWidget,
       );
     });

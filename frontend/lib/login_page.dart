@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'failure_text.dart';
 import 'session.dart';
 
 class LoginPage extends StatefulWidget {
@@ -33,10 +34,14 @@ class _LoginPageState extends State<LoginPage> {
       await session.signIn(_email.text, _password.text);
     } on ApiException catch (e) {
       // Wrong password and unknown email arrive as the same 401, so there is
-      // nothing more specific to say here than what the server said.
-      if (mounted) setState(() => _error = e.message);
+      // nothing more specific to say here than what the server said. A 500 at
+      // login still gets our retry wording, which is the right advice when the
+      // password was probably fine.
+      if (mounted) setState(() => _error = failureMessage(e));
     } on Exception catch (e) {
-      if (mounted) setState(() => _error = 'Could not reach the server: $e');
+      if (mounted) {
+        setState(() => _error = failureMessage(ApiException.networkFailure(e)));
+      }
     }
   }
 
