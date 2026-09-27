@@ -1,1 +1,21 @@
 .mindmate/
+
+# Real configuration. backend/.env.example is tracked on purpose; a filled-in
+# .env holds DATABASE_URL and JWT_SECRET, and committing it would publish both
+# the database password and the key that signs every login token.
+.env
+.env.*
+!.env.example
+
+# Go build output
+backend/backend
+backend/*.exe
+
+# Flutter
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/android/local.properties
+frontend/ios/Pods/
+frontend/ios/.symlinks/
