@@ -54,6 +54,14 @@ func runServe() int {
 		log.Fatal(err)
 	}
 
+	log.Println("listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", newRouter(db, secret)))
+	return 0
+}
+
+// newRouter builds the whole API. It is separated from runServe so tests can
+// mount the real routes on an httptest server instead of exercising a socket.
+func newRouter(db *sql.DB, secret string) http.Handler {
 	mux := http.NewServeMux()
 	// "/{$}" matches the root and nothing else. A bare "/" is a catch-all, which
 	// would answer every unmatched path and every wrong method with 200 "Hello
@@ -110,9 +118,7 @@ func runServe() int {
 		[]string{RoleCanteenManagement, RoleAdmin},
 		http.HandlerFunc(setOrderStatusHandler(db))))
 
-	log.Println("listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
-	return 0
+	return withCORS(mux)
 }
 
 type exchangeRequest struct {
@@ -233,11 +239,17 @@ func placeOrderHandler(db *sql.DB) http.HandlerFunc {
 				writeError(w, http.StatusPaymentRequired, "not enough coins")
 			case errors.Is(err, errInvalidAmount):
 				writeError(w, http.StatusBadRequest, "quantity must be a positive whole number")
-			default:
-				// Prices come from the database, so a rejected item is either sold
-				// out or gone, both of which the client should hear about.
-				log.Printf("place order: %v", err)
+			case errors.Is(err, errItemUnavailable):
+				// Prices come from the database, so an unavailable item is sold
+				// out or withdrawn, and the client should hear which.
 				writeError(w, http.StatusBadRequest, err.Error())
+			default:
+				// Anything else is ours: a deadlock, a dropped connection, a bad
+				// query. Reporting those as 400 would tell the client its request
+				// was malformed when retrying is the right response, so the detail
+				// goes to the log and the client gets a generic 500.
+				log.Printf("place order: %v", err)
+				writeError(w, http.StatusInternalServerError, "internal error")
 			}
 			return
 		}

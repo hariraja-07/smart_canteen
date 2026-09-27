@@ -10,6 +10,12 @@ import (
 
 var errEmptyCart = errors.New("cart is empty")
 
+// errItemUnavailable marks the one per-item failure that is the client's
+// problem, so the handler can answer 400 without treating every other error the
+// same way. A deadlock or a dropped connection is the server's problem and must
+// not be reported as a malformed request.
+var errItemUnavailable = errors.New("item unavailable")
+
 // Order statuses. An order moves forward through the kitchen queue, or leaves
 // it by being cancelled.
 const (
@@ -131,13 +137,13 @@ SELECT name, price::INT, available
 FROM menu_items WHERE id = $1`, itemID,
 		).Scan(&it.Name, &it.UnitPrice, &available)
 		if errors.Is(err, sql.ErrNoRows) {
-			return Order{}, fmt.Errorf("menu item %d does not exist", itemID)
+			return Order{}, fmt.Errorf("%w: menu item %d does not exist", errItemUnavailable, itemID)
 		}
 		if err != nil {
 			return Order{}, fmt.Errorf("read menu item: %w", err)
 		}
 		if !available {
-			return Order{}, fmt.Errorf("%q is sold out", it.Name)
+			return Order{}, fmt.Errorf("%w: %q is sold out", errItemUnavailable, it.Name)
 		}
 
 		it.LineTotal = it.UnitPrice * it.Qty
