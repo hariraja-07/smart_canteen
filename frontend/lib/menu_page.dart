@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'async_view.dart';
+import 'cart.dart';
 import 'models.dart';
 
 /// The menu body, with no Scaffold of its own. The shell provides the app bar
@@ -45,7 +46,7 @@ class _MenuList extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          for (final dish in entry.value) DishTile(dish: dish),
+          for (final dish in entry.value) _CartDishTile(dish: dish),
         ],
         const SizedBox(height: 16),
       ],
@@ -53,31 +54,74 @@ class _MenuList extends StatelessWidget {
   }
 }
 
-class DishTile extends StatelessWidget {
+/// A dish row with its add-to-cart control.
+///
+/// A dish already in the cart swaps its single Add button for a stepper, so
+/// adding a second one does not need a trip back to the same row.
+class _CartDishTile extends StatelessWidget {
   final Dish dish;
 
-  const DishTile({super.key, required this.dish});
+  const _CartDishTile({required this.dish});
 
   @override
   Widget build(BuildContext context) {
+    final cart = CartScope.of(context);
+    final qty = cart.qtyOf(dish.id);
+    final theme = Theme.of(context);
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        title: Text(dish.name),
-        subtitle: dish.description.isEmpty ? null : Text(dish.description),
-        trailing: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
           children: [
-            // Whole coins, so no decimal places. A 10-coin dish reads "10", not
-            // "10.00", because fractional coins do not exist here.
-            Text(
-              '${dish.price} coins',
-              style: Theme.of(context).textTheme.titleMedium,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(dish.name, style: theme.textTheme.titleMedium),
+                  if (dish.description.isNotEmpty)
+                    Text(dish.description, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  // Whole coins, so no decimal places. A 10-coin dish reads
+                  // "10", not "10.00", because fractional coins do not exist.
+                  Text(
+                    '${dish.price} coins',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  _AvailabilityChip(available: dish.available),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            _AvailabilityChip(available: dish.available),
+            if (!dish.available)
+              // Nothing to tap: the server would reject the order anyway.
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('unavailable'),
+              )
+            else if (qty == 0)
+              FilledButton.tonal(
+                onPressed: () => cart.add(dish),
+                child: const Text('Add'),
+              )
+            else
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Remove one',
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: () => cart.removeOne(dish.id),
+                  ),
+                  Text('$qty', style: theme.textTheme.titleMedium),
+                  IconButton(
+                    tooltip: 'Add one',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => cart.add(dish),
+                  ),
+                ],
+              ),
           ],
         ),
       ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'cart.dart';
+import 'cart_page.dart';
 import 'coins_page.dart';
 import 'menu_page.dart';
 import 'orders_page.dart';
@@ -20,14 +22,27 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _index = 0;
 
+  /// Index of the Orders tab, jumped to after a successful order so the user
+  /// lands on the confirmation they just earned.
+  static const _ordersTab = 2;
+
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
 
     // Rebuilt on every role change so switching roles cannot leave a tab from
     // the previous one selected and pointing at the wrong index.
+    // The cart sits between the menu and the order list, because that is the
+    // order a user walks through. A badge on the tab shows the cart is not
+    // empty, since a cart with coins in it is easy to forget.
+    final cart = CartScope.of(context);
     final tabs = <_ShellTab>[
       const _ShellTab(icon: Icons.restaurant, label: 'Menu', page: MenuPage()),
+      _ShellTab(
+        icon: Icons.shopping_basket,
+        label: 'Cart',
+        page: CartPage(onPlaced: () => setState(() => _index = _ordersTab)),
+      ),
       const _ShellTab(
         icon: Icons.receipt_long,
         label: 'Orders',
@@ -72,7 +87,14 @@ class _ShellState extends State<Shell> {
               onDestinationSelected: (i) => setState(() => _index = i),
               destinations: [
                 for (final tab in tabs)
-                  NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+                  NavigationDestination(
+                    // A dot, not a count: a badge showing "12" invites being
+                    // read as a price, and it is a quantity of dishes.
+                    icon: cart.count > 0 && tab.label == 'Cart'
+                        ? Badge(child: Icon(tab.icon))
+                        : Icon(tab.icon),
+                    label: tab.label,
+                  ),
               ],
             ),
     );
