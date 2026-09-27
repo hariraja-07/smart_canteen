@@ -9,12 +9,12 @@ import (
 )
 
 type MenuItem struct {
-	ID          int64   `json:"id"`
-	Name        string  `json:"name"`
-	Category    string  `json:"category"`
-	Price       float64 `json:"price"`
-	Description string  `json:"description"`
-	Available   bool    `json:"available"`
+	ID          int64
+	Name        string
+	Category    string
+	Price       float64
+	Description string
+	Available   bool
 }
 
 func getEnv(key, fallback string) string {

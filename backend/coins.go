@@ -151,13 +151,13 @@ func randomUint64() uint64 {
 
 // CoinEntry is one row of a user's coin history, as returned to clients.
 type CoinEntry struct {
-	ID        int64  `json:"id"`
-	Amount    int    `json:"amount"`
-	Kind      string `json:"kind"`
-	Reason    string `json:"reason"`
-	ActorID   *int64 `json:"actor_id"`
-	OrderID   *int64 `json:"order_id"`
-	CreatedAt string `json:"created_at"`
+	ID        int64
+	Amount    int
+	Kind      string
+	Reason    string
+	ActorID   *int64
+	OrderID   *int64
+	CreatedAt string
 }
 
 func listCoinEntries(db *sql.DB, userID int64, limit int) ([]CoinEntry, error) {

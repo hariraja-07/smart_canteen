@@ -45,12 +45,12 @@ func validRole(role string) error {
 const tokenTTL = time.Hour
 
 type User struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
-	CoinBalance  int    `json:"coin_balance"`
-	PasswordHash string `json:"-"`
+	ID           int64
+	Name         string
+	Email        string
+	Role         string
+	CoinBalance  int
+	PasswordHash string
 }
 
 // canSeeAllOrders is true for the roles that oversee the canteen rather than

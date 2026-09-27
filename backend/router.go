@@ -45,7 +45,7 @@ func newRouter(db *sql.DB, secret string) http.Handler {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, items)
+		writeJSON(w, http.StatusOK, menuItemResponsesOf(items))
 	})
 	mux.HandleFunc("/api/auth/login", loginHandler(db, secret))
 
@@ -56,7 +56,7 @@ func newRouter(db *sql.DB, secret string) http.Handler {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, user)
+		writeJSON(w, http.StatusOK, userResponseOf(user))
 	})))
 
 	// Admin only: the roster.

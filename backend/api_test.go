@@ -294,7 +294,7 @@ func TestRoleGuards(t *testing.T) {
 		owner := newTestUser(t, RoleStudent, 500)
 		_, body := doJSON(t, "POST", srv.URL+"/api/orders", tokenFor(t, owner),
 			map[string]any{"items": []map[string]any{{"menu_item_id": item, "qty": 1}}})
-		var order Order
+		var order orderResponse
 		decodeInto(t, body, &order)
 		if order.ID == 0 {
 			t.Fatalf("could not place a test order: %s", body)
@@ -432,7 +432,7 @@ func TestExchangeMovesBothCacheAndLedger(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("got %d, want 201 (body %s)", resp.StatusCode, body)
 	}
-	var u User
+	var u userResponse
 	decodeInto(t, body, &u)
 	if u.CoinBalance != 25 {
 		t.Errorf("balance %d, want 25", u.CoinBalance)
@@ -464,7 +464,7 @@ func TestPlaceOrderDebitsStudentAndCreditsCanteen(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("got %d, want 201 (body %s)", resp.StatusCode, body)
 	}
-	var order Order
+	var order orderResponse
 	decodeInto(t, body, &order)
 	if order.Total != price*2 {
 		t.Errorf("total %d, want %d", order.Total, price*2)
@@ -570,7 +570,7 @@ func TestListOrdersIsScopedByRole(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("list orders: %d %s", resp.StatusCode, body)
 		}
-		var orders []Order
+		var orders []orderResponse
 		decodeInto(t, body, &orders)
 		return len(orders)
 	}
@@ -603,7 +603,7 @@ func TestStatusTransitionsFollowStateMachine(t *testing.T) {
 
 	_, body := doJSON(t, "POST", srv.URL+"/api/orders", tokenFor(t, student),
 		map[string]any{"items": []map[string]any{{"menu_item_id": item, "qty": 1}}})
-	var order Order
+	var order orderResponse
 	decodeInto(t, body, &order)
 	tok := tokenFor(t, canteen)
 	advance := func(status string) int {
@@ -642,7 +642,7 @@ func TestCancelRefundsExactlyOnce(t *testing.T) {
 
 	_, body := doJSON(t, "POST", srv.URL+"/api/orders", tokenFor(t, student),
 		map[string]any{"items": []map[string]any{{"menu_item_id": item, "qty": 1}}})
-	var order Order
+	var order orderResponse
 	decodeInto(t, body, &order)
 
 	balance := func(u User) int {
@@ -650,7 +650,7 @@ func TestCancelRefundsExactlyOnce(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("reading roster: %d", resp.StatusCode)
 		}
-		var users []User
+		var users []userResponse
 		decodeInto(t, b, &users)
 		for _, x := range users {
 			if x.ID == u.ID {
@@ -830,7 +830,7 @@ func TestSummaryIsNetOfRefunds(t *testing.T) {
 
 	_, body := doJSON(t, "POST", srv.URL+"/api/orders", tokenFor(t, student),
 		map[string]any{"items": []map[string]any{{"menu_item_id": item, "qty": 1}}})
-	var order Order
+	var order orderResponse
 	decodeInto(t, body, &order)
 
 	midway, err := summariseCoins(testDB)

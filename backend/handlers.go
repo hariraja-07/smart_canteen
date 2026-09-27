@@ -50,7 +50,7 @@ func exchangeCoinsHandler(db *sql.DB) http.HandlerFunc {
 			}
 			return
 		}
-		writeJSON(w, http.StatusCreated, target)
+		writeJSON(w, http.StatusCreated, userResponseOf(target))
 	}
 }
 
@@ -79,7 +79,7 @@ func coinHistoryHandler(db *sql.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, entries)
+		writeJSON(w, http.StatusOK, coinEntryResponsesOf(entries))
 	}
 }
 
@@ -120,7 +120,7 @@ func placeOrderHandler(db *sql.DB) http.HandlerFunc {
 			}
 			return
 		}
-		writeJSON(w, http.StatusCreated, order)
+		writeJSON(w, http.StatusCreated, orderResponseOf(order))
 	}
 }
 
@@ -141,7 +141,7 @@ func listOrdersHandler(db *sql.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, orders)
+		writeJSON(w, http.StatusOK, orderResponsesOf(orders))
 	}
 }
 
@@ -173,7 +173,7 @@ func setOrderStatusHandler(db *sql.DB) http.HandlerFunc {
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, order)
+		writeJSON(w, http.StatusOK, orderResponseOf(order))
 	}
 }
 
@@ -189,7 +189,7 @@ func listUsersHandler(db *sql.DB) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, users)
+		writeJSON(w, http.StatusOK, userResponsesOf(users))
 	}
 }
 
@@ -224,6 +224,6 @@ func loginHandler(db *sql.DB, secret string) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		writeJSON(w, http.StatusOK, loginResponse{User: user, Token: token})
+		writeJSON(w, http.StatusOK, loginResponseOf(user, token))
 	}
 }

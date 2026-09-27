@@ -37,30 +37,24 @@ var validTransitions = map[string]map[string]bool{
 	StatusCancelled: {},
 }
 
-// CartLine is one requested item, as sent by the client.
-type CartLine struct {
-	MenuItemID int64 `json:"menu_item_id"`
-	Qty        int   `json:"qty"`
-}
-
 // Order is an order with its lines, as returned to clients.
 type Order struct {
-	ID        int64       `json:"id"`
-	UserID    int64       `json:"user_id"`
-	Customer  string      `json:"customer"`
-	Total     int         `json:"total"`
-	Status    string      `json:"status"`
-	Items     []OrderItem `json:"items"`
-	CreatedAt string      `json:"created_at"`
-	UpdatedAt string      `json:"updated_at"`
+	ID        int64
+	UserID    int64
+	Customer  string
+	Total     int
+	Status    string
+	Items     []OrderItem
+	CreatedAt string
+	UpdatedAt string
 }
 
 type OrderItem struct {
-	MenuItemID int64  `json:"menu_item_id"`
-	Name       string `json:"name"`
-	Qty        int    `json:"qty"`
-	UnitPrice  int    `json:"unit_price"`
-	LineTotal  int    `json:"line_total"`
+	MenuItemID int64
+	Name       string
+	Qty        int
+	UnitPrice  int
+	LineTotal  int
 }
 
 // placeOrder takes a cart and turns it into a paid order.
