@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'models.dart';
 
+/// The menu body, with no Scaffold of its own. The shell provides the app bar
+/// and navigation, so embedding this in a tab must not produce two app bars.
 class MenuPage extends StatefulWidget {
   const MenuPage({super.key});
 
@@ -29,29 +31,26 @@ class _MenuPageState extends State<MenuPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Smart Canteen - Menu')),
-      body: FutureBuilder<List<Dish>>(
-        future: _menuFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Error: ${snapshot.error}'),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: _retry, child: const Text('Retry')),
-                ],
-              ),
-            );
-          }
-          return _MenuList(dishes: snapshot.data!);
-        },
-      ),
+    return FutureBuilder<List<Dish>>(
+      future: _menuFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Error: ${snapshot.error}'),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: _retry, child: const Text('Retry')),
+              ],
+            ),
+          );
+        }
+        return _MenuList(dishes: snapshot.data!);
+      },
     );
   }
 }
@@ -66,6 +65,8 @@ class _MenuList extends StatelessWidget {
     if (dishes.isEmpty) {
       return const Center(child: Text('No dishes available'));
     }
+    // Grouped by category, in the order the categories first appear, so the
+    // layout matches the order the canteen listed them in.
     final byCategory = <String, List<Dish>>{};
     for (final dish in dishes) {
       byCategory.putIfAbsent(dish.category, () => []).add(dish);

@@ -1,10 +1,29 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:frontend/api.dart';
+import 'package:frontend/models.dart';
 import 'package:frontend/main.dart';
+import 'package:frontend/session.dart';
+
+Session _signedIn() {
+  final session = Session();
+  Api.token = 'jwt';
+  session.debugSetUser(
+    const User(
+      id: 17,
+      name: 'Ravi',
+      email: 'ravi@x.test',
+      role: Role.student,
+      coinBalance: 110,
+    ),
+  );
+  return session;
+}
 
 void main() {
   // Whole-coin prices, matching the server's CHECK constraint.
@@ -28,11 +47,16 @@ void main() {
   });
 
   testWidgets('shows loading then grouped menu', (WidgetTester tester) async {
-    Api.client = MockClient((request) async => http.Response(menuJson, 200));
+    // Held open by the test rather than resolved immediately, so the loading
+    // state is observed rather than raced: a mock that answers in a microtask
+    // can finish before the first frame is ever drawn.
+    final menu = Completer<http.Response>();
+    Api.client = MockClient((request) => menu.future);
 
-    await tester.pumpWidget(const SmartCanteenApp());
+    await tester.pumpWidget(SmartCanteenApp(session: _signedIn()));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
+    menu.complete(http.Response(menuJson, 200));
     await tester.pumpAndSettle();
     expect(find.text('Masala Dosa'), findsOneWidget);
     expect(find.text('Garlic Naan'), findsOneWidget);
@@ -47,7 +71,7 @@ void main() {
   testWidgets('shows error and retry on failure', (WidgetTester tester) async {
     Api.client = MockClient((request) async => http.Response('nope', 500));
 
-    await tester.pumpWidget(const SmartCanteenApp());
+    await tester.pumpWidget(SmartCanteenApp(session: _signedIn()));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Error:'), findsOneWidget);
