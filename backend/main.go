@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 )
 
 func withCORS(next http.Handler) http.Handler {
@@ -23,6 +24,12 @@ func withCORS(next http.Handler) http.Handler {
 }
 
 func main() {
+	os.Exit(runCLI(os.Args[1:]))
+}
+
+// runServe starts the HTTP server. It is the default command, so running the
+// binary with no arguments behaves as before.
+func runServe() int {
 	db, err := initDB()
 	if err != nil {
 		log.Fatal(err)
@@ -58,6 +65,7 @@ func main() {
 
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", withCORS(mux)))
+	return 0
 }
 
 type loginRequest struct {

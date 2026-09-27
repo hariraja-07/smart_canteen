@@ -43,11 +43,15 @@ func createUser(db *sql.DB, name, email, password, role string, startingCoins in
 
 	var u User
 	u.PasswordHash = hash
+	// The cached balance and the ledger entry are both derived from
+	// startingCoins in the same transaction, so the two cannot disagree. Writing
+	// them from separate sources is how a balance silently drifts away from its
+	// ledger.
 	err = tx.QueryRow(`
 INSERT INTO users (name, email, password_hash, role, coin_balance)
-VALUES ($1, $2, $3, $4, 0)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, name, email, role, coin_balance`,
-		name, email, hash, role,
+		name, email, hash, role, startingCoins,
 	).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.CoinBalance)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -64,7 +68,6 @@ VALUES ($1, $2, 'exchange_in', $3)`,
 		); err != nil {
 			return User{}, fmt.Errorf("credit starting balance: %w", err)
 		}
-		u.CoinBalance = startingCoins
 	}
 
 	if err := tx.Commit(); err != nil {
