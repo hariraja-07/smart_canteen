@@ -5,11 +5,29 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 )
 
+// corsOrigin returns the value for Access-Control-Allow-Origin.
+//
+// Unset, blank or "*" keeps the permissive default this API has always had. The
+// Flutter app is a native client rather than a browser, and it does not use
+// cookies: authorization is a bearer token the browser script never gets to
+// read, so "*" cannot be used to read one user's data as another. Anyone
+// serving a browser client should name the origins instead.
+func corsOrigin() string {
+	origin := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGIN"))
+	if origin == "" || origin == "*" {
+		return "*"
+	}
+	return origin
+}
+
 func withCORS(next http.Handler) http.Handler {
+	allowed := corsOrigin()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowed)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {

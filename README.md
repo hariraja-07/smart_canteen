@@ -49,6 +49,7 @@ by git.
 | `JWT_SECRET` | yes | at least 32 characters; signs every login token |
 | `DEMO_USER_PASSWORD` | no | when set, startup seeds five demo accounts sharing this password. **Leave unset in production.** |
 | `TEST_DATABASE_URL` | no | used by the Go tests only |
+| `CORS_ALLOWED_ORIGIN` | no | value sent in `Access-Control-Allow-Origin`. Unset or `*` allows any origin; set an exact origin to restrict a browser client |
 
 ### Run locally
 
@@ -200,6 +201,12 @@ On Render, create a PostgreSQL instance, a web service pointing at
 `backend/Dockerfile`, and set those two variables. The service reads the port
 from `PORT`, which is what Render injects; an unusable value fails fast instead
 of silently falling back, and with `PORT` unset it binds 8080 for local use.
+
+The API allows any origin by default, which is what the native Flutter app
+needs. Authorization is a bearer token rather than a cookie, so a browser
+cannot use a wide-open CORS policy to read one user's data as another. If you
+add a browser client served from a known site, set `CORS_ALLOWED_ORIGIN` to that
+origin.
 
 The Flutter app is a normal mobile build. It points at a hardcoded
 `Api.baseUrl`, so change that constant to the deployed backend URL before
