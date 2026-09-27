@@ -23,7 +23,71 @@ func migrations() []migration {
 		{3, "user coin balance and role constraint", migrateUserCoins},
 		{4, "coin ledger", migrateLedger},
 		{5, "whole coin price constraint", migratePriceConstraint},
+		{6, "student role default", migrateRoleDefault},
+		{7, "orders", migrateOrders},
 	}
+}
+
+// migrateRoleDefault fixes a hole left by migration 3, which replaced the
+// 'customer' role with the four-role set and constrained the column but left the
+// column default as 'customer'. Any INSERT that omitted role therefore produced
+// a value the new constraint rejects. Nothing in the app omits role, so this sat
+// unnoticed, but the schema should not contain a default that cannot be used.
+func migrateRoleDefault(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE users ALTER COLUMN role SET DEFAULT 'student'`)
+	return err
+}
+
+// migrateOrders upgrades the orders scaffolded by migration 1 to the whole-coin
+// economy. The tables already existed with decimal NUMERIC money columns, so
+// this alters them in place rather than replacing them, and it works whether or
+// not any orders have been placed.
+//
+// There is no canteen_id: the canteen is a single deployment-wide entity, the way
+// the students share one canteen. Its coins are tracked through the
+// canteen_management user account, which the ledger already knows how to credit.
+func migrateOrders(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+-- Refuse to convert if anything is fractional rather than silently rounding a
+-- real total. Nothing has ever written a fractional total, so this is a
+-- tripwire against a future regression, not a migration step.
+DO $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM orders WHERE total <> FLOOR(total)) THEN
+		RAISE EXCEPTION 'orders.total holds a fractional value; whole coins require manual review';
+	END IF;
+END $$;
+
+ALTER TABLE orders ALTER COLUMN total TYPE INT USING (total)::INT;
+ALTER TABLE orders ALTER COLUMN total SET NOT NULL;
+ALTER TABLE orders ADD CONSTRAINT orders_total_positive CHECK (total > 0);
+ALTER TABLE orders ADD CONSTRAINT orders_status_valid
+	CHECK (status IN ('pending', 'preparing', 'ready', 'completed', 'cancelled'));
+ALTER TABLE orders ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- A student reads their own recent orders, and the canteen works through the
+-- queue by status, so both access patterns get an index.
+CREATE INDEX orders_user_created_idx ON orders (user_id, created_at DESC);
+CREATE INDEX orders_status_created_idx ON orders (status, created_at);
+
+-- order_items snapshots the name and line total. Reading them from menu_items at
+-- display time would let a rename or a price change rewrite what someone paid.
+ALTER TABLE order_items ADD COLUMN name TEXT NOT NULL DEFAULT '';
+UPDATE order_items oi SET name = mi.name
+FROM menu_items mi WHERE mi.id = oi.menu_item_id AND oi.name = '';
+ALTER TABLE order_items ALTER COLUMN name DROP DEFAULT;
+
+ALTER TABLE order_items ADD COLUMN line_total INT NOT NULL DEFAULT 0;
+UPDATE order_items SET line_total = (unit_price)::INT * qty WHERE line_total = 0;
+ALTER TABLE order_items ALTER COLUMN line_total DROP DEFAULT;
+ALTER TABLE order_items ALTER COLUMN unit_price TYPE INT USING (unit_price)::INT;
+
+ALTER TABLE order_items ADD CONSTRAINT order_items_qty_positive CHECK (qty > 0);
+ALTER TABLE order_items ADD CONSTRAINT order_items_price_nonneg CHECK (unit_price >= 0);
+ALTER TABLE order_items ADD CONSTRAINT order_items_line_total_ok
+	CHECK (line_total = unit_price * qty);
+`)
+	return err
 }
 
 func migrateInitial(tx *sql.Tx) error {
