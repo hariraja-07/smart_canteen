@@ -74,6 +74,12 @@ ORDER BY MIN(created_at)`)
 
 // coinSummary reports the totals a canteen manager would want to see: coins
 // issued, coins spent, and what the canteen has collected.
+//
+// Spent and CanteenRevenue are net of refunds. A cancelled order writes both a
+// payment and a refund, and reporting the payment alone would tell an auditor
+// that coins were spent and revenue earned for an order that never happened.
+// A refund is a pair: positive for the customer, negative for the canteen, so
+// each total nets against the half it undoes.
 type coinSummary struct {
 	Issued         int
 	Spent          int
@@ -86,8 +92,10 @@ func summariseCoins(db *sql.DB) (coinSummary, error) {
 	err := db.QueryRow(`
 SELECT
 	COALESCE(SUM(amount) FILTER (WHERE kind = 'exchange_in'), 0),
-	COALESCE(-SUM(amount) FILTER (WHERE kind = 'order_payment'), 0),
-	COALESCE(SUM(amount) FILTER (WHERE kind = 'canteen_revenue'), 0),
+	COALESCE(-SUM(amount) FILTER (WHERE kind = 'order_payment'), 0)
+		- COALESCE(SUM(amount) FILTER (WHERE kind = 'refund' AND amount > 0), 0),
+	COALESCE(SUM(amount) FILTER (WHERE kind = 'canteen_revenue'), 0)
+		+ COALESCE(SUM(amount) FILTER (WHERE kind = 'refund' AND amount < 0), 0),
 	COALESCE(SUM(amount), 0)
 FROM coin_transactions`).Scan(&s.Issued, &s.Spent, &s.CanteenRevenue, &s.CoinsInFlight)
 	if err != nil {

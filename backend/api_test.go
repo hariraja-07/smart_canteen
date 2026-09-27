@@ -758,3 +758,66 @@ func TestReconcileDetectsInjectedDrift(t *testing.T) {
 	}
 	assertLedgerConsistent(t)
 }
+
+// A cancelled order writes a payment and then a refund. If the summary only
+// counted the payment, an auditor would read a cancelled order as coins spent
+// and revenue earned, which is the one thing reconcile exists to get right.
+//
+// Measured as deltas because this suite shares one database across runs, so
+// absolute totals depend on what earlier tests left behind.
+func TestSummaryIsNetOfRefunds(t *testing.T) {
+	canteen := canteenUser(t)
+	student := newTestUser(t, RoleStudent, 500)
+	item, price := someMenuItem(t)
+	srv := httptest.NewServer(newRouter(testDB, testSecret))
+	defer srv.Close()
+
+	// Totals from every earlier run are still in this shared database, so
+	// everything below is a difference against this baseline.
+	before, err := summariseCoins(testDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, body := doJSON(t, "POST", srv.URL+"/api/orders", tokenFor(t, student),
+		map[string]any{"items": []map[string]any{{"menu_item_id": item, "qty": 1}}})
+	var order Order
+	decodeInto(t, body, &order)
+
+	midway, err := summariseCoins(testDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if midway.Spent != before.Spent+price {
+		t.Errorf("after ordering %d coins: Spent moved %d, want %d",
+			price, midway.Spent-before.Spent, price)
+	}
+	if midway.CanteenRevenue != before.CanteenRevenue+price {
+		t.Errorf("after ordering %d coins: CanteenRevenue moved %d, want %d",
+			price, midway.CanteenRevenue-before.CanteenRevenue, price)
+	}
+
+	resp, _ := doJSON(t, "PATCH",
+		fmt.Sprintf("%s/api/orders/%d/status", srv.URL, order.ID), tokenFor(t, canteen),
+		map[string]string{"status": StatusCancelled})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("cancelling: got %d, want 200", resp.StatusCode)
+	}
+
+	after, err := summariseCoins(testDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Back to exactly what it was: the customer has the coins again and the
+	// canteen has collected nothing for an order that never happened.
+	if after.Spent != midway.Spent-price {
+		t.Errorf("after cancelling: Spent = %d, want %d (net of the refund)",
+			after.Spent, midway.Spent-price)
+	}
+	if after.CanteenRevenue != midway.CanteenRevenue-price {
+		t.Errorf("after cancelling: CanteenRevenue = %d, want %d (net of the refund)",
+			after.CanteenRevenue, midway.CanteenRevenue-price)
+	}
+
+	assertLedgerConsistent(t)
+}
